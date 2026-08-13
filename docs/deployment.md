@@ -102,7 +102,6 @@ Caddy is the reference static host. The complete site block:
 pages.example.com {
     @pages_upload {
         method POST
-        path /pages/*
     }
 
     handle @pages_upload {
@@ -113,33 +112,33 @@ pages.example.com {
     }
 
     @pages_internal {
-        path /pages/.pages/*
+        path /.pages/*
     }
 
     respond @pages_internal 404
 
-    redir /pages /pages/ 308
-
-    handle_path /pages/* {
-        root * /srv/pages/public
-        header {
-            Content-Security-Policy "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-            X-Content-Type-Options nosniff
-            Referrer-Policy no-referrer
-            X-Frame-Options DENY
-            Cache-Control "no-store"
-        }
-        file_server
+    header {
+        Content-Security-Policy "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        X-Frame-Options DENY
+        Cache-Control "no-store"
     }
+
+    file_server
 }
 ```
 
 Each part:
 
-- `@pages_upload` proxies only `POST /pages/*` to the service.
+- `@pages_upload` proxies every `POST` request to the service; uploads
+  are the only writes on the site.
 - `@pages_internal` blocks the service staging area. It is never public.
-- `redir` gives the pages root a trailing slash.
-- `handle_path` serves the public root read-only with the security
-  headers.
+- `header` applies the security headers to every response.
+- `file_server` serves the public root read-only.
 
 The `request_body max_size` value must match `PAGES_MAX_UPLOAD_BYTES`.
+A path prefix is a choice, not a requirement: with
+`handle_path /docs/*` instead of `file_server`, the same site lives at
+`https://pages.example.com/docs/...`. Set the same prefix in
+`-base-url`.

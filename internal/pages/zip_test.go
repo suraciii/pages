@@ -61,7 +61,7 @@ func zipBody(t *testing.T, entries ...zipEntry) []byte {
 
 func publishZipRequest(t *testing.T, server *Server, slug, token string, body []byte) *httptest.ResponseRecorder {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodPost, "/pages/"+slug, bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/"+slug, bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/zip")
 	response := httptest.NewRecorder()

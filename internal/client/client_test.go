@@ -17,7 +17,7 @@ func TestPublisherUploadsAndVerifiesIdentityPage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.Method {
 		case http.MethodPost:
-			if got, want := request.URL.Path, "/pages/ticket-status"; got != want {
+			if got, want := request.URL.Path, "/ticket-status"; got != want {
 				t.Errorf("upload path = %q, want %q", got, want)
 			}
 			if got, want := request.Header.Get("Authorization"), "Bearer bumble.secret-one"; got != want {
@@ -30,7 +30,7 @@ func TestPublisherUploadsAndVerifiesIdentityPage(t *testing.T) {
 			uploadedBody = string(body)
 			writer.WriteHeader(http.StatusNoContent)
 		case http.MethodGet:
-			if got, want := request.URL.Path, "/pages/bumble/ticket-status/"; got != want {
+			if got, want := request.URL.Path, "/bumble/ticket-status/"; got != want {
 				t.Errorf("verify path = %q, want %q", got, want)
 			}
 			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -51,7 +51,7 @@ func TestPublisherUploadsAndVerifiesIdentityPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if got, want := publicURL, server.URL+"/pages/bumble/ticket-status/"; got != want {
+	if got, want := publicURL, server.URL+"/bumble/ticket-status/"; got != want {
 		t.Fatalf("public URL = %q, want %q", got, want)
 	}
 	if got, want := uploadedBody, "<!doctype html><h1>Ticket</h1>"; got != want {
@@ -110,7 +110,7 @@ func TestPublisherUploadsZipWithZipContentType(t *testing.T) {
 	if got, want := uploadedContentType, "application/zip"; got != want {
 		t.Fatalf("content type = %q, want %q", got, want)
 	}
-	if got, want := publicURL, server.URL+"/pages/bumble/ticket-status/"; got != want {
+	if got, want := publicURL, server.URL+"/bumble/ticket-status/"; got != want {
 		t.Fatalf("public URL = %q, want %q", got, want)
 	}
 }
@@ -138,7 +138,7 @@ func TestPublisherPublishesThroughServerAndStaticRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new pages server: %v", err)
 	}
-	staticPages := http.StripPrefix("/pages", http.FileServer(http.Dir(publicRoot)))
+	staticPages := http.FileServer(http.Dir(publicRoot))
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodPost {
 			pageServer.ServeHTTP(writer, request)
@@ -158,7 +158,7 @@ func TestPublisherPublishesThroughServerAndStaticRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if got, want := publicURL, server.URL+"/pages/bumble/overview/"; got != want {
+	if got, want := publicURL, server.URL+"/bumble/overview/"; got != want {
 		t.Fatalf("public URL = %q, want %q", got, want)
 	}
 	page, err := os.ReadFile(filepath.Join(publicRoot, "bumble", "overview", "index.html"))

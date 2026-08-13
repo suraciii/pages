@@ -175,9 +175,9 @@ Common steps:
 2. `-file` ends in `.html` or `.zip`. A `.html` file uploads as
    `text/html` and a `.zip` file as `application/zip`. A directory is
    rejected with a usage error: package it as a zip first.
-3. Remote mode: `POST <url>/pages/<slug>` with the Bearer Token and the
+3. Remote mode: `POST <url>/<slug>` with the Bearer Token and the
    content type of the file. Expect `204`. Then
-   `GET <url>/pages/<identity>/<slug>/`. Expect `200` with an HTML
+   `GET <url>/<identity>/<slug>/`. Expect `200` with an HTML
    content type.
 4. Local mode: stage the file under `<dir>/.pages/`, run the validation,
    and swap it into place with the same two-rename sequence as `serve`.

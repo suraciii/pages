@@ -30,7 +30,7 @@ _Avoid_: key, password, credential
 ## Publishing
 
 **Upload**:
-A `POST /pages/<slug>` request with a Bearer Token and an HTML or zip
+A `POST /<slug>` request with a Bearer Token and an HTML or zip
 body. One Upload replaces exactly one Page.
 _Avoid_: write, save, commit
 

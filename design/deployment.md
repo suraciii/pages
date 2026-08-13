@@ -18,8 +18,8 @@ any static file server works. pages does not require any specific host.
 ## Model
 
 ```text diagram
-reader ──GET /pages/<identity>/<slug>/──► static host ──► public root
-publisher ──POST /pages/<slug>──► static host ──proxy──► pages serve (loopback)
+reader ──GET /<identity>/<slug>/──► static host ──► public root
+publisher ──POST /<slug>──► static host ──proxy──► pages serve (loopback)
                                                              │
                                                              ▼ swaps in
                                                         public root
@@ -35,14 +35,19 @@ document root.
 
 A host that serves the public root must:
 
-- Serve the public root read-only at `/pages/`.
+- Serve the public root read-only at the base URL path.
 - Never serve `/.pages/` or other dot-prefixed paths. The staging area is
   not public.
-- Proxy `POST /pages/*` to the loopback server when `pages publish`
+- Proxy `POST /<slug>` to the loopback server when `pages publish`
   must work through the public URL. Without this route, publishing
   works only against the loopback server directly and the read
   verification cannot run.
 - Send the reference headers below, or equivalents.
+
+The base URL is fully custom: any host and any path prefix. A deployment
+that mounts the public root under a prefix, for example `handle_path
+/docs/*`, uses that prefix in `-base-url`, and uploads go to
+`POST <base-url>/<slug>`.
 
 `pages publish` always uploads and verifies through one public base URL,
 so a full deployment needs a host with both routes.
@@ -55,7 +60,6 @@ configuration; other hosts can follow the same rules.
 ```text literal
 @pages_upload {
     method POST
-    path /pages/*
 }
 
 handle @pages_upload {
@@ -66,30 +70,27 @@ handle @pages_upload {
 }
 
 @pages_internal {
-    path /pages/.pages/*
+    path /.pages/*
 }
 
 respond @pages_internal 404
 
-redir /pages /pages/ 308
-
-handle_path /pages/* {
-    root * /srv/pages/public
-    header {
-        Content-Security-Policy "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-        X-Content-Type-Options nosniff
-        Referrer-Policy no-referrer
-        X-Frame-Options DENY
-        Cache-Control "no-store"
-    }
-    file_server
+header {
+    Content-Security-Policy "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+    X-Frame-Options DENY
+    Cache-Control "no-store"
 }
+
+file_server
+```
 ```
 
 ## Semantics
 
-- Only `POST /pages/*` reaches the server. Every other method goes to the
-  static handler. `/pages/.pages/*` never serves: the staging area is not
+- Only `POST` reaches the server. Every other method goes to the
+  static handler. `/.pages/*` never serves: the staging area is not
   public. The server also rejects non-POST methods: host routing is the
   primary boundary and the server check is defense in depth.
 - The host body limit and `pages serve -max-upload-bytes` must be the

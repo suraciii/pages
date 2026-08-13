@@ -14,7 +14,7 @@ verifies the public URL:
 
 ```text literal
 PAGES_UPLOAD_TOKEN='bumble.secret' pages publish -file report.zip -slug report -base-url https://pages.example.com
-https://pages.example.com/pages/bumble/report/
+https://pages.example.com/bumble/report/
 ```
 
 Local mode publishes directly into a public root on the local machine.
@@ -41,17 +41,20 @@ PAGES_PUBLIC_ROOT=/srv/pages/public pages publish -file report.zip -slug report 
 
 ## The Upload contract
 
-The server accepts exactly one Upload shape:
+The server accepts exactly one Upload shape. The base URL is the
+publisher's remote address; the static host routes Uploads and reads from
+the same origin:
 
 ```text literal
-POST /pages/<slug>
+POST <base-url>/<slug>
 Authorization: Bearer <identity>.<secret>
 Content-Type: text/html | application/zip
 ```
 
 A valid Upload replaces exactly `<public-root>/<identity>/<slug>`. The
-Identity comes from the verified Token. It never comes from the upload
-path or a header.
+public address is `<base-url>/<identity>/<slug>/`. The Identity comes
+from the verified Token. It never comes from the upload path or a
+header.
 
 A zip must contain `index.html` at its root. The server rejects archives
 with symlinks, path tricks, duplicate names, hidden names, more than 512

@@ -56,7 +56,7 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 		return "", fmt.Errorf("unsupported page extension %q", filepath.Ext(filePath))
 	}
 
-	uploadURL := joinURL(baseURL, "pages", slug)
+	uploadURL := joinURL(baseURL, slug)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, file)
 	if err != nil {
 		return "", fmt.Errorf("build upload request: %w", err)
@@ -78,7 +78,7 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 		return "", fmt.Errorf("upload page: unexpected status %s", response.Status)
 	}
 
-	publicURL := joinURL(baseURL, "pages", identity, slug) + "/"
+	publicURL := joinURL(baseURL, identity, slug) + "/"
 	verifyRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, publicURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("build verification request: %w", err)

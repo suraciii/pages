@@ -115,7 +115,7 @@ func TestServerRejectsOversizedBodyWithoutReplacingExistingPage(t *testing.T) {
 func TestServerRejectsIdentityClaimInUploadPath(t *testing.T) {
 	server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 1024)
 
-	request := httptest.NewRequest(http.MethodPost, "/pages/fizz/overview", bytes.NewReader([]byte("page")))
+	request := httptest.NewRequest(http.MethodPost, "/fizz/overview", bytes.NewReader([]byte("page")))
 	request.Header.Set("Authorization", "Bearer bumble.secret-one")
 	request.Header.Set("Content-Type", "text/html; charset=utf-8")
 	response := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestServerReloadTokensSwapsAndKeepsOnFailure(t *testing.T) {
 
 func TestServerRejectsEmptyChunkedBody(t *testing.T) {
 	server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 1024)
-	request := httptest.NewRequest(http.MethodPost, "/pages/overview", bytes.NewReader(nil))
+	request := httptest.NewRequest(http.MethodPost, "/overview", bytes.NewReader(nil))
 	request.Header.Set("Authorization", "Bearer bumble.secret-one")
 	request.Header.Set("Content-Type", "text/html; charset=utf-8")
 	request.ContentLength = -1
@@ -196,7 +196,7 @@ func newTestServer(t *testing.T, tokens Tokens, maxBytes int64) (*Server, string
 
 func publishRequest(t *testing.T, server *Server, slug, token string, body []byte) *httptest.ResponseRecorder {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodPost, "/pages/"+slug, bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/"+slug, bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "text/html; charset=utf-8")
 	response := httptest.NewRecorder()

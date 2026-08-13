@@ -83,7 +83,7 @@ pages publish (local) ----------------------------------> public root
   reads. Caddy is the reference host; any static file server works. See
   [deployment.md](deployment.md).
 - `pages publish` has two modes. Remote mode uses one public base URL for
-  Upload and Verification; the host must route `POST /pages/...` to the
+  Upload and Verification; the host must route `POST /...` to the
   server, block `/pages/.pages/...`, and serve other requests from the
   static files. The host requirements are in
   [deployment.md](deployment.md). Local mode writes directly into a
@@ -95,7 +95,7 @@ pages publish (local) ----------------------------------> public root
 ### Upload
 
 1. Reject any method that is not `POST` with `404`.
-2. Require the path `POST /pages/<slug>` with a valid Slug. Reject with
+2. Require the path `POST /<slug>` with a valid Slug. Reject with
    `404` otherwise.
 3. Authenticate the Bearer Token and derive the Identity from it. Reject
    with `401` on failure.

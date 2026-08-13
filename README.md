@@ -22,7 +22,7 @@ pages publish -file report.html -slug report -base-url https://pages.example.com
 `pages publish` prints the public URL when the page is live:
 
 ```text
-https://pages.example.com/pages/bumble/report/
+https://pages.example.com/bumble/report/
 ```
 
 `generate-token` creates the tokens file when it is missing. Without
@@ -35,7 +35,7 @@ and no server runs. Walk through the complete setup in
 The upload client sends:
 
 ```text
-POST /pages/<slug>
+POST /<slug>
 Authorization: Bearer <identity>.<random-secret>
 Content-Type: text/html; charset=utf-8 | application/zip
 ```
@@ -52,8 +52,11 @@ The server derives identity from the verified token, never from an upload path, 
 The public address is:
 
 ```text
-https://<your-host>/pages/<identity>/<slug>/
+<base-url>/<identity>/<slug>/
 ```
+
+The base URL is the publisher's remote address, fully custom: any host
+and any path prefix the user chooses.
 
 The server stages each upload under `<public-root>/.pages/` and swaps it into place with same-filesystem renames, so readers observe the complete old page or complete new page. Durability is best-effort: after a machine crash, publishing again restores the page.
 
@@ -100,7 +103,7 @@ Smoke-test a direct local server with `curl`. The token identity supplies the ta
 
 ```bash
 export PAGES_UPLOAD_TOKEN='bumble.replace-with-a-high-entropy-secret'
-curl -i -X POST http://127.0.0.1:3103/pages/hello \
+curl -i -X POST http://127.0.0.1:3103/hello \
   -H "Authorization: Bearer $PAGES_UPLOAD_TOKEN" \
   -H 'Content-Type: text/html; charset=utf-8' \
   --data-binary '@example.html'

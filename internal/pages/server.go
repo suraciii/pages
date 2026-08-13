@@ -192,7 +192,7 @@ func (server *Server) publishZip(writer http.ResponseWriter, request *http.Reque
 }
 
 func uploadSlug(path string) (string, bool) {
-	const prefix = "/pages/"
+	const prefix = "/"
 	if !strings.HasPrefix(path, prefix) {
 		return "", false
 	}

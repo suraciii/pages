@@ -51,7 +51,7 @@ it under systemd or Docker; both are in [deployment.md](deployment.md).
 ## 4. Serve the public root
 
 A static host serves the public root to readers. Any static file server
-works; Caddy is the reference. The host must route `POST /pages/*` to
+works; Caddy is the reference. The host must route `POST /<slug>` to
 `pages serve`, block `/pages/.pages/*`, and serve everything else from
 the public root. The complete Caddyfile is in
 [deployment.md](deployment.md).
@@ -69,7 +69,7 @@ The command uploads the file, verifies the public URL, and prints it
 when the Page is live:
 
 ```text literal
-https://pages.example.com/pages/bumble/report/
+https://pages.example.com/bumble/report/
 ```
 
 A `.zip` file publishes a directory page whose root file is
