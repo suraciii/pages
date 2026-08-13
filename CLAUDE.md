@@ -30,8 +30,7 @@
 - Write or update the product or design spec before implementation.
 - Use `docs/` for product requirements and user language.
 - Use `design/` for technical design.
-- Follow [docs/_agents.md](docs/_agents.md) before editing `docs/`.
-- Follow [design/agents.md](design/agents.md) before editing `design/`.
+- Follow [docs/writing-style.md](docs/writing-style.md) for all writing.
 - When a document differs from the implementation, add a clear `Gap` section.
 
 ## Collaboration

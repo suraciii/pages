@@ -6,7 +6,7 @@ users who do not read the source. Implementation terms belong to
 [`../design/`](../design/README.md).
 
 Use the terms in [`../CONTEXT.md`](../CONTEXT.md). Follow
-[`_agents.md`](_agents.md) before editing this layer.
+[`AGENTS.md`](AGENTS.md) before editing this layer.
 
 ## Annotation Conventions
 
@@ -16,7 +16,9 @@ section. The body is the spec; the Gap is the footnote.
 
 ## Documents
 
-- [_agents.md](_agents.md) — writing rules for agents that edit this layer.
+- [AGENTS.md](AGENTS.md) — writing rules for agents that edit this layer.
+- [writing-style.md](writing-style.md) — language, structure, and markup
+  rules for every document in the repository.
 - [getting-started.md](getting-started.md) — one pass from zero to a live
   page: install, token, service, host, publish.
 - [publishing.md](publishing.md) — the publish contract: Upload shape, public

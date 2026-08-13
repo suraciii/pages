@@ -2,7 +2,7 @@
 
 This layer describes how pages should be implemented: boundaries, data model,
 interfaces, and trade-offs. Use the writing rules in
-[`agents.md`](agents.md). Use the terms in [`../CONTEXT.md`](../CONTEXT.md).
+[`AGENTS.md`](AGENTS.md). Use the terms in [`../CONTEXT.md`](../CONTEXT.md).
 
 [`docs/`](../docs/README.md) says what must be satisfied; `design/` says how.
 
@@ -13,7 +13,7 @@ diverges significantly from the code, it lists a `Gap` section.
 
 ## Documents
 
-- [agents.md](agents.md) — design-document writing rules for agents. Read it
+- [AGENTS.md](AGENTS.md) — design-document writing rules for agents. Read it
   before writing a spec in `design/`.
 - [architecture.md](architecture.md) — write path, read path, the identity
   boundary, and atomic replacement.

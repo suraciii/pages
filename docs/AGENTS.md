@@ -17,13 +17,7 @@ satisfy. Write it for users and agents who do not read the source code.
 - Keep commands and examples runnable as written.
 - The body is the spec. Put divergence in a `Gap` section.
 - Keep terms consistent with [`../CONTEXT.md`](../CONTEXT.md).
-- Write active prose in English. Use short sentences, American spelling, and
-  `must`, `may`, or `must not`. Treat ASD-STE100 as a writing target, not a
-  compliance claim.
-- Use `text diagram` fences for ASCII diagrams and `text literal` fences for
-  command output, syntax, protocols, and user text. Bare `text` fences are
-  invalid.
-- Use ASCII only in diagrams. Do not use Unicode line art or arrows.
-- Do not use raw HTML, including HTML comments.
+- Follow the language, structure, and markup rules in
+  [`writing-style.md`](writing-style.md).
 
 Full conventions: [`docs/README.md`](README.md).
