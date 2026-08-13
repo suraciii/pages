@@ -41,8 +41,8 @@ PAGES_PUBLIC_ROOT=/srv/pages/public pages publish --file report.zip --slug repor
 
 ## The Upload contract
 
-The server accepts exactly one Upload shape. The remote address is the
-publisher's target; the static host routes Uploads and reads from
+The server accepts exactly one Upload shape. The remote address selects the
+upload target; the static host routes Uploads and reads from
 the same origin:
 
 ```text literal
@@ -82,4 +82,3 @@ may be missing or truncated. Publishing it again restores it.
   run.
 - One Token publishes only inside its own Identity.
 - Pages are static display documents. They must not need scripts.
-

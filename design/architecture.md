@@ -84,7 +84,7 @@ pages publish (local) ----------------------------------> public root
   [deployment.md](deployment.md).
 - `pages publish` has two modes. Remote mode uses one remote address for
   Upload and Verification; the host must route `POST /...` to the
-  server, block `/pages/.pages/...`, and serve other requests from the
+  server, block `/.pages/...`, and serve other requests from the
   static files. The host requirements are in
   [deployment.md](deployment.md). Local mode writes directly into a
   public root with the same staging and swap rules; no server or host is

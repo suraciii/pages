@@ -1,6 +1,6 @@
 # Getting Started
 
-Run pages from zero to a live page in one pass. Every command is
+Run pages from zero to a live Page in one pass. Every command is
 complete; replace the example paths and names with your own. Details and
 alternatives are linked at each step.
 
@@ -13,7 +13,7 @@ go install github.com/suraciii/pages@latest
 ```
 
 The binary lands in `$(go env GOPATH)/bin/pages`. Put that directory on
-the PATH of the service host.
+the `PATH` of the service host.
 
 Developers build from the repository instead:
 
@@ -23,14 +23,11 @@ go build -o /usr/local/bin/pages .
 
 ## 2. Issue a Token
 
-Create the tokens file and the public root, then issue a Token for one
-Identity:
+On the service host, create the tokens directory and Public Root, then issue a
+Token for one Identity. The example paths require root access:
 
 ```text literal
 mkdir -p /etc/pages /srv/pages/public
-echo '{}' > /etc/pages/tokens.json
-chmod 600 /etc/pages/tokens.json
-
 pages generate-token --tokens-file /etc/pages/tokens.json bumble
 ```
 
@@ -40,38 +37,43 @@ The command prints the Token once:
 bumble.7v9A...
 ```
 
-`generate-token` creates a missing tokens file, so the `echo` line is
-only needed when the file must exist before the service starts. See
-[configuration.md](configuration.md) for the tokens file rules.
+Keep the printed Token for the Publisher. `generate-token` creates the tokens
+file with mode `0600`. See [configuration.md](configuration.md) for the tokens
+file rules.
 
 ## 3. Run pages serve
 
 `pages serve` is one HTTP service: it accepts Uploads on loopback,
-answers `GET /healthz`, and writes Pages into the public root. Run it in
+answers `GET /healthz`, and writes Pages into the Public Root. Run it in
 the foreground to try:
 
 ```text literal
 pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
 ```
 
-It logs one line with the resolved configuration. For a real host, run
-it under systemd or Docker; both are in [deployment.md](deployment.md).
+It logs one line with the resolved configuration. Leave it running and use a
+second terminal for the remaining steps. For a real host, run it under
+systemd or Docker; both are in [deployment.md](deployment.md).
 
 ## 4. Serve the public root
 
-A static host serves the public root to readers. Any static file server
+A static host serves the Public Root to readers. Any static file server
 works; Caddy is the reference. The host must route `POST /<slug>` to
-`pages serve`, block `/pages/.pages/*`, and serve everything else from
-the public root. The complete Caddyfile is in
+`pages serve`, block `/.pages/*`, and serve everything else from
+the Public Root. The complete Caddyfile is in
 [deployment.md](deployment.md).
 
 ## 5. Publish a Page
 
-On the publisher machine, the remote upload address is the only mode
-switch. Publish through the public URL:
+On the publisher machine, put the Token from step 2 in the environment. The
+remote upload address is the only mode switch. Publish through the public
+URL:
 
 ```text literal
-pages publish --file report.html --slug report --remote https://pages.example.com
+printf '<!doctype html><title>Report</title><h1>Ready</h1>\n' > report.html
+export PAGES_UPLOAD_TOKEN='bumble.7v9A...'
+pages publish --file report.html --slug report \
+  --remote https://pages.example.com
 ```
 
 The command uploads the file, verifies the public URL, and prints it
@@ -81,16 +83,22 @@ when the Page is live:
 https://pages.example.com/bumble/report/
 ```
 
-A `.zip` file publishes a directory page whose root file is
+A `.zip` file publishes a directory Page whose root file is
 `index.html`.
 
-Without `--remote`, `pages publish` writes straight into a public root
+Without `--remote`, `pages publish` writes straight into a Public Root
 and no service runs:
 
 ```text literal
-pages publish --file report.html --slug report --identity bumble
+PAGES_PUBLIC_ROOT=/srv/pages/public pages publish \
+  --file report.html --slug report --identity bumble
+```
+
+The command prints the Page directory:
+
+```text literal
 /srv/pages/public/bumble/report/
 ```
 
-The local target comes from `PAGES_PUBLIC_ROOT` or the config file. See
+The local Public Root comes from `PAGES_PUBLIC_ROOT` or the config file. See
 [configuration.md](configuration.md) for the publish inputs.
