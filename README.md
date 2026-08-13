@@ -16,7 +16,7 @@ Released under the GNU AGPL-3.0. See [LICENSE](LICENSE).
 Install the binary with the Go toolchain:
 
 ```bash
-go install github.com/suraciii/pages@latest
+go install github.com/suraciii/pages/cmd/pages@latest
 ```
 
 The binary lands in `$(go env GOPATH)/bin/pages`. Developers build

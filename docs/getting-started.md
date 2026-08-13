@@ -9,7 +9,7 @@ alternatives are linked at each step.
 Install the binary with the Go toolchain:
 
 ```text literal
-go install github.com/suraciii/pages@latest
+go install github.com/suraciii/pages/cmd/pages@latest
 ```
 
 The binary lands in `$(go env GOPATH)/bin/pages`. Put that directory on

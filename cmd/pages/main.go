@@ -15,6 +15,9 @@ func run(args []string) int {
 		return 2
 	}
 	switch args[0] {
+	case "--help", "-h":
+		printUsage(os.Stdout)
+		return 0
 	case "serve":
 		return runServe(args[1:])
 	case "publish":
