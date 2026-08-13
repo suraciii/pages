@@ -9,6 +9,17 @@ Minimal static page publishing. One Go command with three subcommands:
 
 The service intentionally does not implement archives, revisions, histories, rollback, SQLite, or CI.
 
+## Install
+
+Install the binary with the Go toolchain:
+
+```bash
+go install github.com/suraciii/pages@latest
+```
+
+The binary lands in `$(go env GOPATH)/bin/pages`. Developers build
+from the repository instead; see [Build And Test](#build-and-test).
+
 ## TLDR
 
 Issue a Token, run the service, publish a page:

@@ -6,7 +6,16 @@ alternatives are linked at each step.
 
 ## 1. Install
 
-Build the binary and put it on the PATH of the service host:
+Install the binary with the Go toolchain:
+
+```text literal
+go install github.com/suraciii/pages@latest
+```
+
+The binary lands in `$(go env GOPATH)/bin/pages`. Put that directory on
+the PATH of the service host.
+
+Developers build from the repository instead:
 
 ```text literal
 go build -o /usr/local/bin/pages ./cmd/pages
