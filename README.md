@@ -27,8 +27,8 @@ https://pages.example.com/pages/bumble/report/
 
 `generate-token` creates the tokens file when it is missing. Without
 `-base-url`, `pages publish` writes straight into a local public root
-and no server runs. See [docs/configuration.md](docs/configuration.md)
-for complete examples.
+and no server runs. Walk through the complete setup in
+[docs/getting-started.md](docs/getting-started.md).
 
 ## Contract
 
@@ -58,7 +58,7 @@ https://<your-host>/pages/<identity>/<slug>/
 The server stages each upload under `<public-root>/.pages/` and swaps it into place with same-filesystem renames, so readers observe the complete old page or complete new page. Durability is best-effort: after a machine crash, publishing again restores the page.
 
 See [docs/publishing.md](docs/publishing.md) for the product spec,
-[docs/configuration.md](docs/configuration.md) for deployment examples,
+[docs/getting-started.md](docs/getting-started.md) to set pages up,
 and [design/architecture.md](design/architecture.md) for the design.
 
 ## Build And Test

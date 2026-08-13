@@ -130,6 +130,10 @@ docker run \
 
 ## systemd
 
+`pages serve` is one HTTP service. systemd and Docker are two equivalent
+ways to run it; see [docs/deployment.md](../docs/deployment.md)
+for complete units.
+
 - Start: `systemctl start pages`.
 - Add an Identity without downtime: edit the tokens file, then
   `systemctl reload pages` (SIGHUP).

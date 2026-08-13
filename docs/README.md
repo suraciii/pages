@@ -17,7 +17,11 @@ section. The body is the spec; the Gap is the footnote.
 ## Documents
 
 - [_agents.md](_agents.md) — writing rules for agents that edit this layer.
+- [getting-started.md](getting-started.md) — one pass from zero to a live
+  page: install, token, service, host, publish.
 - [publishing.md](publishing.md) — the publish contract: Upload shape, public
   address, rejection rules, and limits.
-- [configuration.md](configuration.md) — worked deployment examples: tokens
-  file, `pages serve`, Caddyfile, Docker, and publish commands.
+- [configuration.md](configuration.md) — every configuration input: tokens
+  file, serve flags, publish config file, and environment variables.
+- [deployment.md](deployment.md) — running the service: systemd, Docker,
+  and the Caddy reference.
