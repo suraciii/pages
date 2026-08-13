@@ -17,6 +17,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  pages publish            publish one page")
 	fmt.Fprintln(writer, "  pages generate-token [identity]")
 	fmt.Fprintln(writer, "                           issue an upload token")
+	fmt.Fprintln(writer, "  pages skill              print agent instructions")
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Run \"pages <command> --help\" for command flags.")
 }

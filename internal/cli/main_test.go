@@ -14,7 +14,7 @@ func TestRootHelp(t *testing.T) {
 			command := newTestCommand()
 			command.runtime.userConfigDir = func() (string, error) { return "", errors.New("must not be called") }
 			status := run([]string{argument}, command.runtime)
-			if status != 0 || command.stderr.Len() != 0 || !strings.Contains(command.stdout.String(), "\nUsage:\n") {
+			if status != 0 || command.stderr.Len() != 0 || !strings.Contains(command.stdout.String(), "\nUsage:\n") || !strings.Contains(command.stdout.String(), "pages skill") {
 				t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
 			}
 		})

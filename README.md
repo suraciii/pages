@@ -1,12 +1,14 @@
 # pages
 
-Minimal static Page publishing. One Go command has three subcommands:
+Minimal static Page publishing. One Go command has three product actions:
 
 - `pages serve` accepts authenticated Uploads on loopback and writes Pages
   into a Public Root.
 - `pages publish` publishes one HTML file or zip file and prints its public
   URL or local Page directory.
 - `pages generate-token` issues a Token for the Default or one Named Identity.
+
+`pages skill` prints version-matched instructions for agents.
 
 pages keeps no publication archive, revision history, rollback state, or
 database.
@@ -132,16 +134,19 @@ Destination syntax, defaults, and input precedence.
 
 ## Agent Skill
 
-The [pages skill](skills/pages/SKILL.md) teaches an agent how to Publish with
-this product. From a repository checkout, install it into the agent skill
-directory:
+The [pages skill](skills/pages/SKILL.md) is a stable bootstrap. It installs or
+finds the CLI, then reads the complete version-matched skill from
+`pages skill`. From a repository checkout, install the bootstrap into the
+agent skill directory:
 
 ```text literal
 mkdir -p ~/.agents/skills
 cp -r skills/pages ~/.agents/skills/
 ```
 
-The skill is one file. Copy it again after each update.
+The bootstrap is one file and does not copy operational command syntax. CLI
+updates automatically provide their matching instructions through
+`pages skill`; the bootstrap does not need to be copied again.
 
 ## Development
 

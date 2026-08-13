@@ -1,8 +1,9 @@
 # CLI
 
-pages is one binary with three subcommands. The product has three
-actions: `serve` runs the publish service, `publish` puts one page live,
-and `generate-token` issues an upload Token.
+pages is one binary with three product actions and one self-description
+command. `serve` runs the publish service, `publish` puts one page live,
+`generate-token` issues an upload Token, and `skill` prints the agent skill
+for this CLI version.
 
 This specification is the source of truth for command grammar, Destination
 syntax, input precedence, defaults, output, and exit codes. User documents
@@ -19,9 +20,12 @@ show runnable examples and link here for the exact contract.
 - Agent-friendly output. `publish` and `generate-token` write exactly one
   machine-readable line to stdout and nothing else. Errors go to stderr
   with a non-zero exit code.
-- The command surface stays minimal: exactly three verbs. Token listing,
-  token deletion, and page listing are not part of the contract and get
-  no verbs.
+- The product surface stays minimal: exactly three action verbs. Token
+  listing, token deletion, and page listing are not part of the contract and
+  get no verbs. `skill` is read-only CLI metadata, not a product action.
+- Version-matched agent instructions. The distributed bootstrap skill only
+  finds or installs the CLI. The CLI owns the complete operational skill, so
+  command changes cannot leave an installed skill behind.
 - Deployment configures one static-resources directory. The rest of the
   runtime layout is owned and maintained by `serve`.
 - User configuration defaults to the operating system's user config
@@ -47,6 +51,7 @@ Rejected alternatives:
 pages serve          [flags]
 pages publish        [flags]
 pages generate-token [flags] [identity]
+pages skill
 ```
 
 `pages` with no subcommand prints usage to stderr and exits 2. `--help` and
@@ -271,6 +276,28 @@ Exit codes: 0 on success, 1 for file failures and a refused replacement,
 A newly written Token takes effect on the next tokens reload of `serve`
 (`SIGHUP`).
 
+### pages skill
+
+Prints the complete agent skill for the installed CLI version. The output is
+a valid `SKILL.md`, including its YAML frontmatter, and is the source of truth
+for how an agent uses pages.
+
+`skill` accepts no arguments or flags other than `--help` and `-h`. On
+success, it writes only the skill to stdout and exits 0. Help writes only the
+command usage to stdout and exits 0. Any other input writes the error and
+usage to stderr and exits 2.
+
+The command is deterministic. It must not read configuration, inspect the
+file system, access the network, or depend on the current directory. The
+skill is embedded in the binary so its instructions and command grammar have
+the same version.
+
+The separately distributed bootstrap skill is intentionally incomplete. It
+tries `pages skill`. When the CLI is absent or does not support that command,
+it runs `go install github.com/suraciii/pages@latest`, then runs `pages skill`
+and follows that output. It must not manage the user's shell or copy
+operational command syntax that can become stale.
+
 ## Examples
 ```text literal
 pages serve --destination pages-public
@@ -280,10 +307,12 @@ pages generate-token bumble
 PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --dest https://pages.example.com
 
 pages publish --file report.zip --slug report --config <user-config-dir>/pages/config.json
+
+pages skill
 ```
 
 ## Status
 
-Implemented. One `pages` binary has the three subcommands above. Publish and
-Serve use the Destination grammar. The Go module path is
+Implemented. One `pages` binary has the commands above. Publish and Serve use
+the Destination grammar. The Go module path is
 `github.com/suraciii/pages`.

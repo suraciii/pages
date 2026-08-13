@@ -5,9 +5,9 @@ truth for what is done and what is next.
 
 ## Done
 
-- One `pages` binary with three subcommands: `pages serve`, `pages
-  publish`, and `pages generate-token`. The command contract is in
-  [design/cli.md](design/cli.md).
+- One `pages` binary with three product actions: `pages serve`, `pages
+  publish`, and `pages generate-token`. `pages skill` is its self-description
+  command. The command contract is in [design/cli.md](design/cli.md).
 - Directory Pages: zip Uploads with the validation rules and the swap
   sequence in [design/architecture.md](design/architecture.md).
 - `pages publish` local mode: write into a public root directly, with the
@@ -22,6 +22,8 @@ truth for what is done and what is next.
 - Serve operations: `GET /healthz`, tokens reload on `SIGHUP`, one startup
   log line with the resolved configuration.
 - The pages program supports Linux, macOS, and Windows.
+- `pages skill` prints version-matched agent instructions. The distributed
+  skill is a stable bootstrap that finds or installs the CLI.
 - The Go module is `github.com/suraciii/pages`.
 
 ## Next
