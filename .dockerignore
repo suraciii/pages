@@ -1,0 +1,9 @@
+.git
+.scratch
+dist
+*.tmp
+tokens.json
+.env
+.env.*
+*.key
+*.pem
