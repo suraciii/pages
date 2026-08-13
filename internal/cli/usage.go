@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -37,10 +36,10 @@ func subcommandUsage(flags *flag.FlagSet, format string, args ...any) func() {
 	}
 }
 
-func parseFlags(flags *flag.FlagSet, args []string) (int, bool) {
-	flags.SetOutput(os.Stderr)
+func parseFlags(flags *flag.FlagSet, args []string, stdout, stderr io.Writer) (int, bool) {
+	flags.SetOutput(stderr)
 	if invalid := singleDashFlag(flags, args); invalid != "" {
-		fmt.Fprintf(os.Stderr, "%s: use --%s instead of -%s\n", flags.Name(), invalid, invalid)
+		fmt.Fprintf(stderr, "%s: use --%s instead of -%s\n", flags.Name(), invalid, invalid)
 		flags.Usage()
 		return 2, false
 	}
@@ -48,13 +47,13 @@ func parseFlags(flags *flag.FlagSet, args []string) (int, bool) {
 	flags.SetOutput(&output)
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			_, _ = os.Stdout.Write(output.Bytes())
+			_, _ = stdout.Write(output.Bytes())
 			return 0, false
 		}
-		_, _ = os.Stderr.Write(output.Bytes())
+		_, _ = stderr.Write(output.Bytes())
 		return 2, false
 	}
-	flags.SetOutput(os.Stderr)
+	flags.SetOutput(stderr)
 	return 0, true
 }
 

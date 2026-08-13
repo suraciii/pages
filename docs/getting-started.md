@@ -49,7 +49,7 @@ answers `GET /healthz`, and writes Pages into the Public Root. Run it in
 the foreground to try:
 
 ```text literal
-pages serve --public-root pages-public
+pages serve --destination pages-public
 ```
 
 It logs one line with the resolved configuration. Leave it running and use a
@@ -66,15 +66,14 @@ the Public Root. The complete Caddyfile is in
 
 ## 5. Publish a Page
 
-On the publisher machine, put the Token from step 2 in the environment. The
-remote upload address is the only mode switch. Publish through the public
-URL:
+On the publisher machine, put the Token from step 2 in the environment. Use
+the public URL as the Destination:
 
 ```text literal
 printf '<!doctype html><title>Report</title><h1>Ready</h1>\n' > report.html
 export PAGES_UPLOAD_TOKEN='7v9A_example-secret'
 pages publish --file report.html --slug report \
-  --remote https://pages.example.com
+  --dest https://pages.example.com
 ```
 
 The command uploads the file, verifies the public URL, and prints it
@@ -87,12 +86,11 @@ https://pages.example.com/report/
 A `.zip` file publishes a directory Page whose root file is
 `index.html`.
 
-Without `--remote`, `pages publish` writes straight into a Public Root
-and no service runs:
+With a local-path Destination, `pages publish` writes straight into a Public
+Root and no service runs:
 
 ```text literal
-PAGES_PUBLIC_ROOT=pages-public pages publish \
-  --file report.html --slug report
+pages publish --file report.html --slug report --dest pages-public
 ```
 
 The command prints the Page directory:
@@ -101,7 +99,8 @@ The command prints the Page directory:
 <current-directory>/pages-public/report/
 ```
 
-The local Public Root comes from `PAGES_PUBLIC_ROOT` or the config file. If
-neither is set, `pages publish` uses the current working directory. See
+The local Public Root comes from `--destination`, `--dest`,
+`PAGES_DESTINATION`, or the config file. If none is set, `pages publish` uses
+the current working directory. See
 [configuration.md](configuration.md) for the Publish inputs and
 [publishing.md](publishing.md) for optional Named Identity scopes.

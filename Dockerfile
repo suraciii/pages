@@ -7,7 +7,7 @@ COPY go.mod ./
 RUN go mod download
 
 COPY . ./
-RUN go test ./... && \
+RUN timeout -k 10s 300s go test ./... && \
     CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /artifact/pages .
 
 FROM alpine:3.22
@@ -20,7 +20,7 @@ COPY --from=build --chown=10001:10001 /artifact/pages /app/pages
 USER 10001:10001
 
 ENV PAGES_LISTEN_ADDR=0.0.0.0:3103 \
-    PAGES_PUBLIC_ROOT=/srv/pages/public \
+    PAGES_DESTINATION=/srv/pages/public \
     PAGES_TOKENS_FILE=/run/secrets/pages_tokens \
     PAGES_MAX_UPLOAD_BYTES=10485760
 

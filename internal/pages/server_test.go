@@ -2,11 +2,14 @@ package pages
 
 import (
 	"bytes"
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/suraciii/pages/internal/filesystem"
 )
 
 func TestServerPublishesHTMLUnderVerifiedIdentity(t *testing.T) {
@@ -17,7 +20,7 @@ func TestServerPublishesHTMLUnderVerifiedIdentity(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 
-	page, err := os.ReadFile(filepath.Join(publicRoot, "@bumble", "ticket-status", "index.html"))
+	page, err := server.fileSystem.ReadFile(filepath.Join(publicRoot, "@bumble", "ticket-status", "index.html"))
 	if err != nil {
 		t.Fatalf("read published page: %v", err)
 	}
@@ -39,8 +42,8 @@ func TestServerSeparatesDefaultAndNamedSameSlug(t *testing.T) {
 		t.Fatalf("bumble status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 
-	assertPageContent(t, publicRoot, "", "overview", "default page")
-	assertPageContent(t, publicRoot, "bumble", "overview", "bumble page")
+	assertPageContent(t, server.fileSystem, publicRoot, "", "overview", "default page")
+	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "bumble page")
 }
 
 func TestServerRejectsBadTokenWithoutReplacingExistingPage(t *testing.T) {
@@ -54,7 +57,7 @@ func TestServerRejectsBadTokenWithoutReplacingExistingPage(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
 
-	assertPageContent(t, publicRoot, "bumble", "overview", "original")
+	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "original")
 }
 
 func TestServerRejectsTokenWithTamperedIdentity(t *testing.T) {
@@ -71,8 +74,8 @@ func TestServerRejectsTokenWithTamperedIdentity(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
 
-	assertPageContent(t, publicRoot, "bumble", "overview", "original")
-	if _, err := os.Stat(filepath.Join(publicRoot, "@fizz", "overview", "index.html")); !os.IsNotExist(err) {
+	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "original")
+	if _, err := server.fileSystem.Stat(filepath.Join(publicRoot, "@fizz", "overview", "index.html")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("fizz page exists after rejected identity tampering: %v", err)
 	}
 }
@@ -88,7 +91,7 @@ func TestServerRejectsInvalidUTF8WithoutReplacingExistingPage(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
 	}
 
-	assertPageContent(t, publicRoot, "bumble", "overview", "original")
+	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "original")
 }
 
 func TestServerRejectsOversizedBodyWithoutReplacingExistingPage(t *testing.T) {
@@ -102,7 +105,7 @@ func TestServerRejectsOversizedBodyWithoutReplacingExistingPage(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
 	}
 
-	assertPageContent(t, publicRoot, "bumble", "overview", "original")
+	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "original")
 }
 
 func TestServerRejectsIdentityClaimInUploadPath(t *testing.T) {
@@ -132,8 +135,11 @@ func TestServerHealthzNeedsNoAuthentication(t *testing.T) {
 
 func TestServerReloadTokensSwapsAndKeepsOnFailure(t *testing.T) {
 	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 1024)
-	tokensFile := filepath.Join(t.TempDir(), "tokens.json")
-	if err := os.WriteFile(tokensFile, []byte(`{"identities":{"fizz":"secret-two"}}`), 0o600); err != nil {
+	tokensFile := "/config/tokens.json"
+	if err := server.fileSystem.MkdirAll(filepath.Dir(tokensFile), 0o700); err != nil {
+		t.Fatalf("create config: %v", err)
+	}
+	if err := server.fileSystem.WriteFile(tokensFile, []byte(`{"identities":{"fizz":"secret-two"}}`), 0o600); err != nil {
 		t.Fatalf("write tokens file: %v", err)
 	}
 
@@ -147,7 +153,7 @@ func TestServerReloadTokensSwapsAndKeepsOnFailure(t *testing.T) {
 		t.Fatalf("new token status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 
-	if err := os.WriteFile(tokensFile, []byte("not json"), 0o600); err != nil {
+	if err := server.fileSystem.WriteFile(tokensFile, []byte("not json"), 0o600); err != nil {
 		t.Fatalf("corrupt tokens file: %v", err)
 	}
 	if err := server.ReloadTokens(tokensFile); err == nil {
@@ -159,24 +165,26 @@ func TestServerReloadTokensSwapsAndKeepsOnFailure(t *testing.T) {
 }
 
 func TestNewServerRecoversDisplacedPageAtStartup(t *testing.T) {
-	publicRoot := filepath.Join(t.TempDir(), "public")
+	fileSystem := filesystem.NewMemory("/workspace")
+	publicRoot := "/public"
 	oldDir := filepath.Join(publicRoot, ".pages", "staging", "@bumble", "old-cafe-report")
-	if err := os.MkdirAll(oldDir, 0o700); err != nil {
+	if err := fileSystem.MkdirAll(oldDir, 0o700); err != nil {
 		t.Fatalf("create displaced page: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(oldDir, "index.html"), []byte("old page"), 0o644); err != nil {
+	if err := fileSystem.WriteFile(filepath.Join(oldDir, "index.html"), []byte("old page"), 0o644); err != nil {
 		t.Fatalf("write displaced page: %v", err)
 	}
 	if _, err := NewServer(ServerConfig{
 		PublicRoot:     publicRoot,
 		Tokens:         namedTestTokens("bumble", "secret-one"),
 		MaxUploadBytes: 1024,
+		FileSystem:     fileSystem,
 	}); err != nil {
 		t.Fatalf("new server: %v", err)
 	}
 
-	assertPageContent(t, publicRoot, "bumble", "report", "old page")
-	assertStagingEmpty(t, publicRoot)
+	assertPageContent(t, fileSystem, publicRoot, "bumble", "report", "old page")
+	assertStagingEmpty(t, fileSystem, publicRoot)
 }
 
 func TestServerRejectsEmptyChunkedBody(t *testing.T) {
@@ -195,12 +203,13 @@ func TestServerRejectsEmptyChunkedBody(t *testing.T) {
 
 func newTestServer(t *testing.T, tokens Tokens, maxBytes int64) (*Server, string) {
 	t.Helper()
-	root := t.TempDir()
-	publicRoot := filepath.Join(root, "public")
+	fileSystem := filesystem.NewMemory("/workspace")
+	publicRoot := "/public"
 	server, err := NewServer(ServerConfig{
 		PublicRoot:     publicRoot,
 		Tokens:         tokens,
 		MaxUploadBytes: maxBytes,
+		FileSystem:     fileSystem,
 	})
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -218,14 +227,32 @@ func publishRequest(t *testing.T, server *Server, slug, token string, body []byt
 	return response
 }
 
-func assertPageContent(t *testing.T, publicRoot, identity, slug, want string) {
+func assertPageContent(t *testing.T, fileSystem filesystem.FS, publicRoot, identity, slug, want string) {
 	t.Helper()
-	page, err := os.ReadFile(filepath.Join(publicRoot, IdentityScope(identity), slug, "index.html"))
+	page, err := fileSystem.ReadFile(filepath.Join(publicRoot, IdentityScope(identity), slug, "index.html"))
 	if err != nil {
 		t.Fatalf("read page: %v", err)
 	}
 	if got := string(page); got != want {
 		t.Fatalf("page = %q, want %q", got, want)
+	}
+}
+
+func assertStagingEmpty(t *testing.T, fileSystem filesystem.FS, publicRoot string) {
+	t.Helper()
+	staging := filepath.Join(publicRoot, ".pages", "staging")
+	entries, err := fileSystem.ReadDir(staging)
+	if err != nil {
+		t.Fatalf("read staging: %v", err)
+	}
+	for _, scope := range entries {
+		children, err := fileSystem.ReadDir(filepath.Join(staging, scope.Name()))
+		if err != nil {
+			t.Fatalf("read staging scope %q: %v", scope.Name(), err)
+		}
+		if len(children) != 0 {
+			t.Fatalf("staging scope %q has %d leftovers", scope.Name(), len(children))
+		}
 	}
 }
 

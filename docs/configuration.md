@@ -43,6 +43,10 @@ file path takes precedence over the configuration directory. `generate-token`
 creates a missing parent directory with mode `0700` and the tokens file with
 mode `0600`.
 
+If the operating system does not provide a user config directory, the command
+fails. Set one of the explicit directory or file inputs above. It does not put
+`tokens.json` in the current directory.
+
 The Default Identity Token is a pure secret. A Named Identity Token is
 `<identity>.<secret>`. Give the printed Token to the Publisher, who stores it
 in the config file or receives it as `PAGES_UPLOAD_TOKEN`. To rotate a Token,
@@ -54,12 +58,12 @@ reload of `serve`; no restart is needed.
 The serve flags and their environment fallbacks:
 
 ```text literal
-pages serve --public-root pages-public
+pages serve --destination pages-public
 ```
 
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
-| --public-root | PAGES_PUBLIC_ROOT | none | yes |
+| --destination, --dest | PAGES_DESTINATION | current directory | no |
 | --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
 | --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
@@ -68,7 +72,7 @@ pages serve --public-root pages-public
 At startup the service creates the public root and logs one line with the
 resolved configuration. It answers `GET /healthz` on the listener and
 reloads the tokens file on `SIGHUP`; a failed reload keeps the previous
-tokens.
+tokens. The Destination must be a local path. Serve rejects a URL.
 
 ## 3. The publish config file
 
@@ -81,8 +85,7 @@ environment values always win over the config file. The file is
 
 ```text literal
 {
-  "remote": "https://pages.example.com",
-  "public-root": "pages-public",
+  "destination": "https://pages.example.com",
   "token": "default-secret",
   "identities": {
     "bumble": "secret-one",
@@ -92,10 +95,14 @@ environment values always win over the config file. The file is
 }
 ```
 
-- `remote` is the remote upload address; `public-root` is the local
-  public root. A remote address selects remote mode; without one,
-  publishing is local. When `public-root` is empty, local Publish uses the
-  current working directory.
+If the operating system does not provide a user config directory, `publish`
+continues without a default config file. It does not read `config.json` from
+the current directory. Use one of these explicit inputs when a config file is
+required.
+
+- `destination` is a local path or an absolute HTTP(S) URL. A path selects
+  local mode. A URL selects remote mode. When it is empty, local Publish uses
+  the current working directory.
 - `token` stores the Default Identity Token. `identities` maps each Named
   Identity to its secret. `identity` selects one Named Identity. Without it,
   Publish uses the Default Identity.
@@ -106,3 +113,7 @@ environment values always win over the config file. The file is
 `PAGES_UPLOAD_TOKEN` carries the full Token and always wins in remote mode. A
 pure secret selects the Default Identity. `identity.secret` selects a Named
 Identity. Local mode does not read this environment variable.
+
+The Publisher resolves Destination in this order: `--destination` or
+`--dest`, `PAGES_DESTINATION`, `config.destination`, then the current
+directory. Do not set both flag names in one command.

@@ -12,6 +12,9 @@ truth for what is done and what is next.
   sequence in [design/architecture.md](design/architecture.md).
 - `pages publish` local mode: write into a public root directly, with the
   same validation and swap rules.
+- One Destination input for Publish: a local path selects local mode, an
+  HTTP(S) URL selects remote mode, and an omitted value uses the current
+  directory. `--dest` is an alias for `--destination`.
 - The server owns its public root: it creates the directory, stages
   inside `.pages/`, and recovers crashed swaps at startup.
 - No `fsync`: best-effort durability, documented in

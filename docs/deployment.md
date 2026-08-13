@@ -47,7 +47,7 @@ After=network.target
 
 [Service]
 User=pages
-ExecStart=/usr/local/bin/pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
+ExecStart=/usr/local/bin/pages serve --destination /srv/pages/public --tokens-file /etc/pages/tokens.json
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 
@@ -140,4 +140,4 @@ The `request_body max_size` value must match `PAGES_MAX_UPLOAD_BYTES`.
 A path prefix is a choice, not a requirement: with
 `handle_path /docs/*` instead of `file_server`, the same site lives at
 `https://pages.example.com/docs/...`. Set the same prefix in
-`--remote`.
+`pages publish --destination`.

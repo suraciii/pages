@@ -1,23 +1,22 @@
 package cli
 
 import (
-	"os"
+	"fmt"
 	"path/filepath"
 )
 
-func defaultConfigDir() string {
-	if value := os.Getenv("PAGES_CONFIG_DIR"); value != "" {
-		return value
+func resolveConfigDir(runtime commandRuntime, configured string) (string, error) {
+	if configured != "" {
+		return configured, nil
 	}
-	userConfigDir, err := os.UserConfigDir()
+	userConfigDir, err := runtime.userConfigDir()
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("determine user config directory: %w", err)
 	}
-	return filepath.Join(userConfigDir, "pages")
-}
-
-func defaultConfigPath() string {
-	return configFilePath(defaultConfigDir())
+	if userConfigDir == "" {
+		return "", fmt.Errorf("determine user config directory: operating system returned an empty path")
+	}
+	return filepath.Join(userConfigDir, "pages"), nil
 }
 
 func configFilePath(configDir string) string {

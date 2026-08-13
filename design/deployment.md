@@ -25,8 +25,8 @@ publisher ──POST /<slug>──► static host ──proxy──► pages ser
                                                         public root
 ```
 
-The deployment chooses the public root once and gives the same value to
-`pages serve --public-root` and to the static host's document root.
+The deployment chooses the public root once and gives the same path to
+`pages serve --destination` and to the static host's document root.
 
 The tokens file must sit outside the public root and outside every host
 document root.
@@ -46,10 +46,10 @@ A host that serves the public root must:
 
 The remote address is fully custom: any host and any path prefix. A deployment
 that mounts the public root under a prefix, for example `handle_path
-/docs/*`, uses that prefix in `--remote`, and uploads go to
-`POST <remote>/<slug>`.
+/docs/*`, uses that URL in `pages publish --destination`, and uploads go to
+`POST <destination>/<slug>`.
 
-`pages publish` always uploads and verifies through one remote address,
+`pages publish` always uploads and verifies through one remote Destination,
 so a full deployment needs a host with both routes.
 
 ## Caddy reference
@@ -96,7 +96,7 @@ file_server
 - The host body limit and `pages serve --max-upload-bytes` must be the
   same value. The host enforces the limit for the public; the server
   enforces it for the loopback hop. Operators change both together.
-- The static host root and `pages serve --public-root` must name the same
+- The static host root and `pages serve --destination` must name the same
   Public Root.
 - The CSP header blocks script execution: pages are static display
   documents, never interactive applications. `style-src 'self'` allows

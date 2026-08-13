@@ -36,8 +36,7 @@ Local Publish writes directly into a Public Root. It needs no Token or
 service:
 
 ```text literal
-PAGES_PUBLIC_ROOT=pages-public pages publish \
-  --file report.html --slug report
+pages publish --file report.html --slug report --dest pages-public
 ```
 
 ```text literal
@@ -51,7 +50,7 @@ service host:
 
 ```text literal
 pages generate-token
-pages serve --public-root pages-public
+pages serve --dest /srv/pages/public
 ```
 
 Use this minimal Caddyfile:
@@ -64,7 +63,7 @@ pages.example.com {
     @internal path /.pages/*
     respond @internal 404
 
-    root * {$PAGES_PUBLIC_ROOT}
+    root * /srv/pages/public
     file_server
 }
 ```
@@ -74,7 +73,7 @@ Use the Token printed by `generate-token` to Publish:
 ```text literal
 export PAGES_UPLOAD_TOKEN='7v9A_example-secret'
 pages publish --file report.html --slug report \
-  --remote https://pages.example.com
+  --dest https://pages.example.com
 ```
 
 ```text literal
@@ -90,7 +89,7 @@ and process management.
 A remote Publish sends one Upload:
 
 ```text literal
-POST <remote>/<slug>
+POST <destination>/<slug>
 Authorization: Bearer <secret> | Bearer <identity>.<secret>
 Content-Type: text/html; charset=utf-8 | application/zip
 ```
@@ -107,13 +106,17 @@ The Default Identity stays hidden:
 The Publisher verifies and prints the public URL:
 
 ```text literal
-<remote>/<slug>/
-<remote>/@<identity>/<slug>/
+<destination>/<slug>/
+<destination>/@<identity>/<slug>/
 ```
 
 A local Publish writes directly into a Public Root and does not use a service
 or network. `--identity` selects an optional Named Identity. Both modes
 prepare a complete Page before they replace the old Page.
+
+`--destination` and its `--dest` alias accept either a local path or an
+absolute HTTP(S) URL. When neither is set, local Publish uses the current
+directory.
 
 ## Documentation
 

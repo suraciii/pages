@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/suraciii/pages/internal/filesystem"
 )
 
 var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
@@ -101,7 +103,12 @@ func (tokens Tokens) validate(requireToken bool) error {
 
 // LoadTokens reads a non-empty tokens file.
 func LoadTokens(path string) (Tokens, error) {
-	tokens, err := ReadTokensFile(path)
+	return LoadTokensWithFS(filesystem.OS, path)
+}
+
+// LoadTokensWithFS reads a non-empty tokens file through fileSystem.
+func LoadTokensWithFS(fileSystem filesystem.FS, path string) (Tokens, error) {
+	tokens, err := ReadTokensFileWithFS(fileSystem, path)
 	if err != nil {
 		return Tokens{}, err
 	}
@@ -113,9 +120,14 @@ func LoadTokens(path string) (Tokens, error) {
 
 // ReadTokensFile reads structured Tokens. A missing file yields empty Tokens.
 func ReadTokensFile(path string) (Tokens, error) {
-	file, err := os.Open(path)
+	return ReadTokensFileWithFS(filesystem.OS, path)
+}
+
+// ReadTokensFileWithFS reads structured Tokens through fileSystem.
+func ReadTokensFileWithFS(fileSystem filesystem.FS, path string) (Tokens, error) {
+	file, err := fileSystem.Open(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return Tokens{}, nil
 		}
 		return Tokens{}, fmt.Errorf("read tokens file: %w", err)
@@ -139,6 +151,11 @@ func ReadTokensFile(path string) (Tokens, error) {
 
 // WriteTokensFile saves Tokens atomically with mode 0600.
 func WriteTokensFile(path string, tokens Tokens) error {
+	return WriteTokensFileWithFS(filesystem.OS, path, tokens)
+}
+
+// WriteTokensFileWithFS saves Tokens atomically through fileSystem.
+func WriteTokensFileWithFS(fileSystem filesystem.FS, path string, tokens Tokens) error {
 	if err := tokens.validate(true); err != nil {
 		return err
 	}
@@ -149,14 +166,14 @@ func WriteTokensFile(path string, tokens Tokens) error {
 	data = append(data, '\n')
 
 	directory := filepath.Dir(path)
-	temporary, err := os.CreateTemp(directory, ".tokens-*.json")
+	temporary, err := fileSystem.CreateTemp(directory, ".tokens-*.json")
 	if err != nil {
 		return fmt.Errorf("create temporary tokens file: %w", err)
 	}
 	temporaryName := temporary.Name()
 	defer func() {
 		_ = temporary.Close()
-		_ = os.Remove(temporaryName)
+		_ = fileSystem.Remove(temporaryName)
 	}()
 	if err := temporary.Chmod(0o600); err != nil {
 		return fmt.Errorf("set tokens file mode: %w", err)
@@ -167,7 +184,7 @@ func WriteTokensFile(path string, tokens Tokens) error {
 	if err := temporary.Close(); err != nil {
 		return fmt.Errorf("close tokens file: %w", err)
 	}
-	if err := os.Rename(temporaryName, path); err != nil {
+	if err := fileSystem.Rename(temporaryName, path); err != nil {
 		return fmt.Errorf("replace tokens file: %w", err)
 	}
 	return nil
@@ -175,22 +192,28 @@ func WriteTokensFile(path string, tokens Tokens) error {
 
 // IssueToken serializes the complete read, check, and atomic write operation.
 func IssueToken(path, identity string, replace bool) (string, error) {
+	return IssueTokenWithFS(filesystem.OS, path, identity, replace)
+}
+
+// IssueTokenWithFS performs the complete Token transaction through
+// fileSystem.
+func IssueTokenWithFS(fileSystem filesystem.FS, path, identity string, replace bool) (string, error) {
 	if identity != "" && !ValidName(identity) {
 		return "", fmt.Errorf("invalid identity %q", identity)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := fileSystem.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", fmt.Errorf("create tokens directory: %w", err)
 	}
 
 	tokenUpdateMu.Lock()
 	defer tokenUpdateMu.Unlock()
-	unlock, err := lockTokensFile(path)
+	unlock, err := fileSystem.Lock(path + ".lock")
 	if err != nil {
 		return "", err
 	}
 	defer unlock()
 
-	tokens, err := ReadTokensFile(path)
+	tokens, err := ReadTokensFileWithFS(fileSystem, path)
 	if err != nil {
 		return "", err
 	}
@@ -217,33 +240,13 @@ func IssueToken(path, identity string, replace bool) (string, error) {
 		}
 		tokens.Identities[identity] = secret
 	}
-	if err := WriteTokensFile(path, tokens); err != nil {
+	if err := WriteTokensFileWithFS(fileSystem, path, tokens); err != nil {
 		return "", err
 	}
 	if identity == "" {
 		return secret, nil
 	}
 	return identity + "." + secret, nil
-}
-
-func lockTokensFile(path string) (func(), error) {
-	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open tokens file lock: %w", err)
-	}
-	if err := lock.Chmod(0o600); err != nil {
-		lock.Close()
-		return nil, fmt.Errorf("set tokens file lock mode: %w", err)
-	}
-	unlockFile, err := lockFile(lock)
-	if err != nil {
-		lock.Close()
-		return nil, fmt.Errorf("lock tokens file: %w", err)
-	}
-	return func() {
-		_ = unlockFile()
-		_ = lock.Close()
-	}, nil
 }
 
 // Authenticate validates an Authorization header and returns its verified

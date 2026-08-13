@@ -7,12 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/suraciii/pages/internal/client"
+	"github.com/suraciii/pages/internal/destination"
+	"github.com/suraciii/pages/internal/filesystem"
 	"github.com/suraciii/pages/internal/pages"
 )
 
@@ -20,23 +23,44 @@ import (
 // as a usage error.
 var ErrUsage = errors.New("usage")
 
+// Runtime supplies process resources to Resolve and Run.
+type Runtime struct {
+	FileSystem       filesystem.FS
+	Environment      func(string) string
+	CurrentDirectory func() (string, error)
+	HTTPClient       interface {
+		Do(*http.Request) (*http.Response, error)
+	}
+}
+
+func productionRuntime() Runtime {
+	return Runtime{
+		FileSystem:       filesystem.OS,
+		Environment:      os.Getenv,
+		CurrentDirectory: os.Getwd,
+	}
+}
+
 // Config is the publish config file. Every field is optional.
 type Config struct {
-	Remote     string            `json:"remote"`
-	PublicRoot string            `json:"public-root"`
-	Token      string            `json:"token"`
-	Identities map[string]string `json:"identities"`
-	Identity   string            `json:"identity"`
+	Destination string            `json:"destination"`
+	Token       string            `json:"token"`
+	Identities  map[string]string `json:"identities"`
+	Identity    string            `json:"identity"`
 }
 
 // LoadConfig reads a config file. An empty path means the default file:
 // a missing default file is fine. A named file must exist.
 func LoadConfig(path string) (*Config, error) {
+	return loadConfig(filesystem.OS, path)
+}
+
+func loadConfig(fileSystem filesystem.FS, path string) (*Config, error) {
 	config := &Config{}
 	if path == "" {
 		return config, nil
 	}
-	file, err := os.Open(path)
+	file, err := fileSystem.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
@@ -65,30 +89,34 @@ func LoadConfig(path string) (*Config, error) {
 
 // Input is the publish command line before resolution.
 type Input struct {
-	File       string
-	Slug       string
-	Remote     string
-	Identity   string
-	Timeout    time.Duration
-	ConfigPath string
+	File        string
+	Slug        string
+	Destination string
+	Identity    string
+	Timeout     time.Duration
+	ConfigPath  string
 }
 
 // Resolved is the publish command line after resolution.
 type Resolved struct {
-	File          string
-	Slug          string
-	Remote        bool
-	RemoteAddress string
-	LocalTarget   string
-	Identity      string
-	Token         string
-	Timeout       time.Duration
+	File        string
+	Slug        string
+	Destination destination.Value
+	Identity    string
+	Token       string
+	Timeout     time.Duration
 }
 
 // Resolve derives every input in the spec order. A resolved value that
 // fails validation is a usage error.
 func Resolve(input Input) (*Resolved, error) {
-	config, err := LoadConfig(input.ConfigPath)
+	return ResolveWithRuntime(input, productionRuntime())
+}
+
+// ResolveWithRuntime resolves publish inputs through explicit process
+// resources.
+func ResolveWithRuntime(input Input, runtime Runtime) (*Resolved, error) {
+	config, err := loadConfig(runtime.FileSystem, input.ConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -105,17 +133,20 @@ func Resolve(input Input) (*Resolved, error) {
 	if extension != ".html" && extension != ".zip" {
 		return nil, fmt.Errorf("%w: --file must end in .html or .zip", ErrUsage)
 	}
-	if info, statError := os.Stat(input.File); statError == nil && info.IsDir() {
+	if info, statError := runtime.FileSystem.Stat(input.File); statError == nil && info.IsDir() {
 		return nil, fmt.Errorf("%w: --file must not be a directory; package it as a zip", ErrUsage)
 	}
 
-	remoteAddress := firstNonEmpty(input.Remote, os.Getenv("PAGES_REMOTE"), config.Remote)
-	remote := remoteAddress != ""
+	resolvedDestination, err := destination.ParseWithCurrentDirectory(firstNonEmpty(input.Destination, runtime.Environment("PAGES_DESTINATION"), config.Destination), runtime.CurrentDirectory)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUsage, err)
+	}
+	remote := resolvedDestination.IsRemote()
 
 	identity := ""
 	token := ""
 	if remote {
-		token = os.Getenv("PAGES_UPLOAD_TOKEN")
+		token = runtime.Environment("PAGES_UPLOAD_TOKEN")
 		if token != "" {
 			prefix, err := pages.TokenIdentity(token)
 			if err != nil {
@@ -147,34 +178,30 @@ func Resolve(input Input) (*Resolved, error) {
 	}
 
 	resolved := &Resolved{
-		File:          input.File,
-		Slug:          input.Slug,
-		Remote:        remote,
-		RemoteAddress: remoteAddress,
-		Identity:      identity,
-		Token:         token,
-		Timeout:       input.Timeout,
-	}
-	if !remote {
-		resolved.LocalTarget = firstNonEmpty(os.Getenv("PAGES_PUBLIC_ROOT"), config.PublicRoot)
-		if resolved.LocalTarget == "" {
-			resolved.LocalTarget, err = os.Getwd()
-			if err != nil {
-				return nil, fmt.Errorf("resolve current directory: %w", err)
-			}
-		}
+		File:        input.File,
+		Slug:        input.Slug,
+		Destination: resolvedDestination,
+		Identity:    identity,
+		Token:       token,
+		Timeout:     input.Timeout,
 	}
 	return resolved, nil
 }
 
 // Run executes the resolved publish and returns the one line to print.
 func Run(resolved *Resolved) (string, error) {
-	if !resolved.Remote {
-		return runLocal(resolved)
+	return RunWithRuntime(resolved, productionRuntime())
+}
+
+// RunWithRuntime executes a resolved publish through explicit process
+// resources.
+func RunWithRuntime(resolved *Resolved, runtime Runtime) (string, error) {
+	if !resolved.Destination.IsRemote() {
+		return runLocal(resolved, runtime.FileSystem)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resolved.Timeout)
 	defer cancel()
-	publisher := client.Publisher{BaseURL: resolved.RemoteAddress, Token: resolved.Token}
+	publisher := client.Publisher{BaseURL: resolved.Destination.String(), Token: resolved.Token, HTTPClient: runtime.HTTPClient, FileSystem: runtime.FileSystem}
 	return publisher.Publish(ctx, resolved.File, resolved.Slug)
 }
 
@@ -182,8 +209,8 @@ func Run(resolved *Resolved) (string, error) {
 // same validation and swap rules as the server. Only the zip safety
 // checks run: at most 512 entries and an uncompressed total of at most
 // four times the compressed size.
-func runLocal(resolved *Resolved) (result string, resultErr error) {
-	stager, err := pages.NewStager(resolved.LocalTarget)
+func runLocal(resolved *Resolved, fileSystem filesystem.FS) (result string, resultErr error) {
+	stager, err := pages.NewStagerWithFS(resolved.Destination.LocalPath(), fileSystem)
 	if err != nil {
 		return "", err
 	}
@@ -193,27 +220,27 @@ func runLocal(resolved *Resolved) (result string, resultErr error) {
 	}
 	defer func() {
 		if resultErr != nil {
-			_ = os.RemoveAll(stagedDir)
+			_ = fileSystem.RemoveAll(stagedDir)
 		}
 	}()
 
 	if strings.EqualFold(filepath.Ext(resolved.File), ".zip") {
-		info, err := os.Stat(resolved.File)
+		info, err := fileSystem.Stat(resolved.File)
 		if err != nil {
 			return "", fmt.Errorf("stat zip file: %w", err)
 		}
-		if err := pages.StageZip(resolved.File, stagedDir, info.Size()); err != nil {
+		if err := pages.StageZipWithFS(fileSystem, resolved.File, stagedDir, info.Size()); err != nil {
 			return "", err
 		}
 		if err := stager.SwapZip(resolved.Identity, resolved.Slug, stagedDir); err != nil {
 			return "", err
 		}
 	} else {
-		source, err := os.Open(resolved.File)
+		source, err := fileSystem.Open(resolved.File)
 		if err != nil {
 			return "", fmt.Errorf("open page file: %w", err)
 		}
-		target, err := os.Create(filepath.Join(stagedDir, "index.html"))
+		target, err := fileSystem.OpenFile(filepath.Join(stagedDir, "index.html"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 		if err != nil {
 			source.Close()
 			return "", fmt.Errorf("create staged page: %w", err)
@@ -232,7 +259,7 @@ func runLocal(resolved *Resolved) (result string, resultErr error) {
 		}
 	}
 
-	absoluteTarget, err := filepath.Abs(resolved.LocalTarget)
+	absoluteTarget, err := fileSystem.Abs(resolved.Destination.LocalPath())
 	if err != nil {
 		return "", fmt.Errorf("resolve public root: %w", err)
 	}
@@ -241,7 +268,7 @@ func runLocal(resolved *Resolved) (result string, resultErr error) {
 		segments = append(segments, scope)
 	}
 	segments = append(segments, resolved.Slug)
-	return filepath.Join(segments...) + "/", nil
+	return filepath.Join(segments...) + string(filepath.Separator), nil
 }
 
 func firstNonEmpty(values ...string) string {

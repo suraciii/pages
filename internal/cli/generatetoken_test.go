@@ -1,210 +1,268 @@
 package cli
 
 import (
+	"bytes"
+	"errors"
 	"io"
-	"os"
+	"io/fs"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/suraciii/pages/internal/filesystem"
 	"github.com/suraciii/pages/internal/pages"
 )
 
+type testCommand struct {
+	runtime     commandRuntime
+	fileSystem  *filesystem.Memory
+	environment map[string]string
+	stdout      *bytes.Buffer
+	stderr      *bytes.Buffer
+}
+
+func newTestCommand() *testCommand {
+	fileSystem := filesystem.NewMemory("/workspace")
+	workDir, err := fileSystem.Abs(".")
+	if err != nil {
+		panic(err)
+	}
+	environment := make(map[string]string)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	return &testCommand{
+		runtime: commandRuntime{
+			fileSystem:       fileSystem,
+			environment:      func(name string) string { return environment[name] },
+			userConfigDir:    func() (string, error) { return "/config", nil },
+			currentDirectory: func() (string, error) { return workDir, nil },
+			stdout:           stdout,
+			stderr:           stderr,
+		},
+		fileSystem:  fileSystem,
+		environment: environment,
+		stdout:      stdout,
+		stderr:      stderr,
+	}
+}
+
+func (command *testCommand) writeFile(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := command.fileSystem.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create parent: %v", err)
+	}
+	if err := command.fileSystem.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+}
+
 func TestGenerateTokenDefaultAndNamed(t *testing.T) {
-	tokensFile := filepath.Join(t.TempDir(), "tokens.json")
-	defaultOutput := captureStdout(t, func() int {
-		return runGenerateToken([]string{"--tokens-file", tokensFile})
-	})
-	if defaultOutput == "" || strings.Contains(defaultOutput, ".") {
-		t.Fatalf("default output = %q", defaultOutput)
+	command := newTestCommand()
+	tokensFile := "/state/tokens.json"
+	if status := runGenerateTokenWithRuntime([]string{"--tokens-file", tokensFile}, command.runtime); status != 0 {
+		t.Fatalf("default status = %d, stderr = %q", status, command.stderr.String())
+	}
+	defaultToken := strings.TrimSpace(command.stdout.String())
+	if defaultToken == "" || strings.Contains(defaultToken, ".") {
+		t.Fatalf("default output = %q", defaultToken)
 	}
 
-	namedOutput := captureStdout(t, func() int {
-		return runGenerateToken([]string{"--tokens-file", tokensFile, "bumble"})
-	})
-	if !strings.HasPrefix(namedOutput, "bumble.") {
-		t.Fatalf("named output = %q", namedOutput)
+	command.stdout.Reset()
+	if status := runGenerateTokenWithRuntime([]string{"--tokens-file", tokensFile, "bumble"}, command.runtime); status != 0 {
+		t.Fatalf("named status = %d, stderr = %q", status, command.stderr.String())
+	}
+	namedToken := strings.TrimSpace(command.stdout.String())
+	if !strings.HasPrefix(namedToken, "bumble.") {
+		t.Fatalf("named output = %q", namedToken)
 	}
 
-	tokens, err := pages.ReadTokensFile(tokensFile)
+	tokens, err := pages.ReadTokensFileWithFS(command.fileSystem, tokensFile)
 	if err != nil {
 		t.Fatalf("read tokens: %v", err)
 	}
-	if tokens.Token != defaultOutput || "bumble."+tokens.Identities["bumble"] != namedOutput {
+	if tokens.Token != defaultToken || "bumble."+tokens.Identities["bumble"] != namedToken {
 		t.Fatalf("tokens = %+v", tokens)
 	}
 }
 
 func TestGenerateTokenRequiresReplace(t *testing.T) {
-	tokensFile := filepath.Join(t.TempDir(), "tokens.json")
-	if status := runGenerateToken([]string{"--tokens-file", tokensFile}); status != 0 {
+	command := newTestCommand()
+	args := []string{"--tokens-file", "/state/tokens.json"}
+	if status := runGenerateTokenWithRuntime(args, command.runtime); status != 0 {
 		t.Fatalf("first status = %d", status)
 	}
-	if status := runGenerateToken([]string{"--tokens-file", tokensFile}); status != 1 {
+	if status := runGenerateTokenWithRuntime(args, command.runtime); status != 1 {
 		t.Fatalf("duplicate status = %d", status)
 	}
-	if status := runGenerateToken([]string{"--tokens-file", tokensFile, "--replace"}); status != 0 {
+	if status := runGenerateTokenWithRuntime(append(args, "--replace"), command.runtime); status != 0 {
 		t.Fatalf("replace status = %d", status)
 	}
 }
 
 func TestGenerateTokenConfigDirectory(t *testing.T) {
-	configDir := filepath.Join(t.TempDir(), "pages-config")
-	output := captureStdout(t, func() int {
-		return runGenerateToken([]string{"--config-dir", configDir})
-	})
-	if output == "" {
-		t.Fatal("generate-token produced no token")
+	command := newTestCommand()
+	if status := runGenerateTokenWithRuntime([]string{"--config-dir", "/settings"}, command.runtime); status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
-	if _, err := os.Stat(filepath.Join(configDir, "tokens.json")); err != nil {
+	if _, err := command.fileSystem.Stat("/settings/tokens.json"); err != nil {
 		t.Fatalf("tokens file: %v", err)
 	}
 }
 
 func TestGenerateTokenExactFileOverridesConfigDirectory(t *testing.T) {
-	configDir := filepath.Join(t.TempDir(), "pages-config")
-	exactFile := filepath.Join(t.TempDir(), "mounted", "tokens.json")
-	output := captureStdout(t, func() int {
-		return runGenerateToken([]string{
-			"--config-dir", configDir,
-			"--tokens-file", exactFile,
-		})
-	})
-	if output == "" {
-		t.Fatal("generate-token produced no token")
+	command := newTestCommand()
+	if status := runGenerateTokenWithRuntime([]string{"--config-dir", "/settings", "--tokens-file", "/mounted/tokens.json"}, command.runtime); status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
-	if _, err := os.Stat(exactFile); err != nil {
+	if _, err := command.fileSystem.Stat("/mounted/tokens.json"); err != nil {
 		t.Fatalf("exact tokens file: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(configDir, "tokens.json")); !os.IsNotExist(err) {
+	if _, err := command.fileSystem.Stat("/settings/tokens.json"); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("configuration directory tokens file error = %v", err)
 	}
 }
 
 func TestPublishConfigDirectory(t *testing.T) {
-	root := t.TempDir()
-	configDir := filepath.Join(t.TempDir(), "pages-config")
-	filePath := filepath.Join(t.TempDir(), "report.html")
-	if err := os.WriteFile(filePath, []byte("<h1>ready</h1>"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
-	configPath := filepath.Join(configDir, "config.json")
-	if err := os.MkdirAll(configDir, 0o700); err != nil {
-		t.Fatalf("create config directory: %v", err)
-	}
-	config := `{"public-root":"` + root + `"}`
-	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	output, _, status := captureOutput(t, func() int {
-		return runPublish([]string{"--config-dir", configDir, "--file", filePath, "--slug", "report"})
-	})
+	command := newTestCommand()
+	command.writeFile(t, "/source/report.html", "<h1>ready</h1>")
+	command.writeFile(t, "/settings/config.json", `{"destination":"/public"}`)
+	status := runPublishWithRuntime([]string{"--config-dir", "/settings", "--file", "/source/report.html", "--slug", "report"}, command.runtime)
 	if status != 0 {
-		t.Fatalf("status = %d, output = %q", status, output)
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
-	if _, err := os.Stat(filepath.Join(root, "report", "index.html")); err != nil {
+	if _, err := command.fileSystem.Stat("/public/report/index.html"); err != nil {
 		t.Fatalf("published page: %v", err)
 	}
 }
 
-func TestSubcommandHelpUsesStdoutAndShowsDefaults(t *testing.T) {
-	stdout, stderr, status := captureOutput(t, func() int {
-		return runPublish([]string{"--help"})
-	})
-	if status != 0 {
-		t.Fatalf("status = %d", status)
+func TestPublishExactConfigSkipsUserConfigDir(t *testing.T) {
+	command := newTestCommand()
+	command.runtime.userConfigDir = func() (string, error) { return "", errors.New("must not be called") }
+	command.writeFile(t, "/source/report.html", "<h1>ready</h1>")
+	command.writeFile(t, "/settings/config.json", `{"destination":"/public"}`)
+	status := runPublishWithRuntime([]string{"--config", "/settings/config.json", "--file", "/source/report.html", "--slug", "report"}, command.runtime)
+	if status != 0 || command.stderr.Len() != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
-	if stderr != "" {
-		t.Fatalf("stderr = %q", stderr)
-	}
-	for _, text := range []string{"Usage: pages publish", "--timeout", "default 1m30s", "--config"} {
-		if !strings.Contains(stdout, text) {
-			t.Fatalf("stdout does not contain %q:\n%s", text, stdout)
-		}
+	if _, err := command.fileSystem.Stat("/public/report/index.html"); err != nil {
+		t.Fatalf("published page: %v", err)
 	}
 }
 
-func TestSubcommandRejectsSingleDashFlagAlias(t *testing.T) {
-	_, stderr, status := captureOutput(t, func() int {
-		return runPublish([]string{"-file", "page.html"})
-	})
-	if status != 2 || !strings.Contains(stderr, "use --file instead of -file") {
-		t.Fatalf("status = %d, stderr = %q", status, stderr)
-	}
-}
-
-func TestSubcommandErrorsStayOnStderrWhenHelpAppearsLater(t *testing.T) {
-	stdout, stderr, status := captureOutput(t, func() int {
-		return runPublish([]string{"--bad", "--help"})
-	})
-	if status != 2 || stdout != "" || !strings.Contains(stderr, "flag provided but not defined") {
-		t.Fatalf("status = %d, stdout = %q, stderr = %q", status, stdout, stderr)
-	}
-}
-
-func TestPublishAndServeRejectPositionalArguments(t *testing.T) {
-	for name, run := range map[string]func() int{
-		"publish": func() int { return runPublish([]string{"extra"}) },
-		"serve":   func() int { return runServe([]string{"extra"}) },
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, stderr, status := captureOutput(t, run)
-			if status != 2 || !strings.Contains(stderr, "positional arguments are not allowed") {
-				t.Fatalf("status = %d, stderr = %q", status, stderr)
+func TestPublishDestinationFlags(t *testing.T) {
+	for _, flagName := range []string{"--destination", "--dest"} {
+		t.Run(flagName, func(t *testing.T) {
+			command := newTestCommand()
+			command.writeFile(t, "/source/report.html", "<h1>ready</h1>")
+			status := runPublishWithRuntime([]string{flagName, "/public", "--file", "/source/report.html", "--slug", "report"}, command.runtime)
+			if status != 0 || command.stderr.Len() != 0 {
+				t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
+			}
+			if _, err := command.fileSystem.Stat("/public/report/index.html"); err != nil {
+				t.Fatalf("published page: %v", err)
 			}
 		})
 	}
 }
 
-func captureStdout(t *testing.T, run func() int) string {
-	t.Helper()
-	read, write, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe: %v", err)
+func TestPublishRemoteDestinationAliasUsesInjectedHTTP(t *testing.T) {
+	command := newTestCommand()
+	command.writeFile(t, "/source/report.html", "<h1>ready</h1>")
+	command.environment["PAGES_UPLOAD_TOKEN"] = "secret"
+	requests := 0
+	command.runtime.httpClient = testDoer(func(request *http.Request) *http.Response {
+		requests++
+		if requests == 1 {
+			if request.Method != http.MethodPost || request.URL.Path != "/report" {
+				t.Errorf("upload request = %s %s", request.Method, request.URL.Path)
+			}
+			return cliHTTPResponse(http.StatusNoContent, "")
+		}
+		if request.Method != http.MethodGet || request.URL.Path != "/report/" {
+			t.Errorf("verification request = %s %s", request.Method, request.URL.Path)
+		}
+		return cliHTTPResponse(http.StatusOK, "text/html")
+	})
+
+	status := runPublishWithRuntime([]string{"--dest", "https://pages.example.com", "--file", "/source/report.html", "--slug", "report"}, command.runtime)
+	if status != 0 || requests != 2 || strings.TrimSpace(command.stdout.String()) != "https://pages.example.com/report/" {
+		t.Fatalf("status = %d, requests = %d, stdout = %q, stderr = %q", status, requests, command.stdout.String(), command.stderr.String())
 	}
-	original := os.Stdout
-	os.Stdout = write
-	status := run()
-	os.Stdout = original
-	if err := write.Close(); err != nil {
-		t.Fatalf("close stdout pipe: %v", err)
-	}
-	data, err := io.ReadAll(read)
-	if err != nil {
-		t.Fatalf("read stdout: %v", err)
-	}
-	read.Close()
-	if status != 0 {
-		t.Fatalf("status = %d", status)
-	}
-	return strings.TrimSpace(string(data))
 }
 
-func captureOutput(t *testing.T, run func() int) (string, string, int) {
-	t.Helper()
-	stdoutRead, stdoutWrite, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("stdout pipe: %v", err)
+type testDoer func(*http.Request) *http.Response
+
+func (doer testDoer) Do(request *http.Request) (*http.Response, error) {
+	return doer(request), nil
+}
+
+func cliHTTPResponse(status int, contentType string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Status:     http.StatusText(status),
+		Header:     http.Header{"Content-Type": []string{contentType}},
+		Body:       io.NopCloser(strings.NewReader("")),
 	}
-	stderrRead, stderrWrite, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("stderr pipe: %v", err)
+}
+
+func TestDestinationAliasesCannotBeCombined(t *testing.T) {
+	command := newTestCommand()
+	status := runPublishWithRuntime([]string{"--destination", "/one", "--dest", "/two", "--file", "report.html", "--slug", "report"}, command.runtime)
+	if status != 2 || !strings.Contains(command.stderr.String(), "must not be used together") {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
-	originalStdout, originalStderr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = stdoutWrite, stderrWrite
-	status := run()
-	os.Stdout, os.Stderr = originalStdout, originalStderr
-	stdoutWrite.Close()
-	stderrWrite.Close()
-	stdout, err := io.ReadAll(stdoutRead)
-	if err != nil {
-		t.Fatalf("read stdout: %v", err)
+}
+
+func TestPublishRejectsLegacyDestinationEnvironment(t *testing.T) {
+	command := newTestCommand()
+	command.environment["PAGES_REMOTE"] = "https://pages.example.com"
+	status := runPublishWithRuntime([]string{"--file", "report.html", "--slug", "report"}, command.runtime)
+	if status != 2 || !strings.Contains(command.stderr.String(), "use PAGES_DESTINATION") {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
-	stderr, err := io.ReadAll(stderrRead)
-	if err != nil {
-		t.Fatalf("read stderr: %v", err)
+}
+
+func TestSubcommandHelpUsesStdoutAndShowsDefaults(t *testing.T) {
+	command := newTestCommand()
+	status := runPublishWithRuntime([]string{"--help"}, command.runtime)
+	if status != 0 || command.stderr.Len() != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
-	stdoutRead.Close()
-	stderrRead.Close()
-	return string(stdout), string(stderr), status
+	for _, text := range []string{"Usage: pages publish", "--timeout", "default 1m30s", "--destination", "--dest"} {
+		if !strings.Contains(command.stdout.String(), text) {
+			t.Fatalf("stdout does not contain %q:\n%s", text, command.stdout.String())
+		}
+	}
+}
+
+func TestSubcommandRejectsSingleDashFlagAlias(t *testing.T) {
+	command := newTestCommand()
+	status := runPublishWithRuntime([]string{"-file", "page.html"}, command.runtime)
+	if status != 2 || !strings.Contains(command.stderr.String(), "use --file instead of -file") {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
+	}
+}
+
+func TestSubcommandErrorsStayOnStderrWhenHelpAppearsLater(t *testing.T) {
+	command := newTestCommand()
+	status := runPublishWithRuntime([]string{"--bad", "--help"}, command.runtime)
+	if status != 2 || command.stdout.Len() != 0 || !strings.Contains(command.stderr.String(), "flag provided but not defined") {
+		t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
+	}
+}
+
+func TestPublishAndServeRejectPositionalArguments(t *testing.T) {
+	for _, name := range []string{"publish", "serve"} {
+		t.Run(name, func(t *testing.T) {
+			command := newTestCommand()
+			status := runPublishWithRuntime([]string{"extra"}, command.runtime)
+			if name == "serve" {
+				status = runServeWithRuntime([]string{"extra"}, command.runtime)
+			}
+			if status != 2 || !strings.Contains(command.stderr.String(), "positional arguments are not allowed") {
+				t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
+			}
+		})
+	}
 }

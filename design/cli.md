@@ -10,8 +10,8 @@ and `generate-token` issues an upload Token.
   server and an upload client. Users and agents must not learn
   implementation names. The verbs state the product.
 - A precise command language. Every subcommand has one grammar, one flag
-  set, one stdout contract, and exact exit codes. No aliases, no
-  abbreviations, no optional words.
+  set, one stdout contract, and exact exit codes. `--dest` is the only
+  abbreviation; it is an explicit alias for `--destination`.
 - Agent-friendly output. `publish` and `generate-token` write exactly one
   machine-readable line to stdout and nothing else. Errors go to stderr
   with a non-zero exit code.
@@ -33,9 +33,9 @@ Rejected alternatives:
   [deployment.md](deployment.md).
 - `pages token` as the token verb. Rejected: the verb must state the
   action. `generate-token` says what the command does.
-- A new target parameter such as `-to`. Rejected: the existing
-  `--remote`, `PAGES_REMOTE`, and `PAGES_PUBLIC_ROOT` already name the
-  two targets. A new parameter adds a knob without new information.
+- Separate local and remote target parameters. Rejected: two mutually
+  exclusive parameters expose the execution mode as another user decision.
+  One Destination value contains all required information.
 
 ## Model
 
@@ -58,22 +58,28 @@ down gracefully.
 
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
-| --public-root | PAGES_PUBLIC_ROOT | none | yes |
+| --destination, --dest | PAGES_DESTINATION | current directory | no |
 | --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
 | --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
 | --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
 
-`--public-root` is the static-resources directory. Deployment picks it;
-`serve` creates it at startup and maintains everything under it, including
-the internal `.pages/` staging area. See
-[architecture.md](architecture.md).
+The Destination must be a local path. It resolves to the Public Root.
+`serve` rejects an HTTP(S) URL or another URI with a usage error. Deployment
+usually sets an explicit Destination; `serve` creates it at startup and
+maintains everything under it, including the internal `.pages/` staging area.
+See [architecture.md](architecture.md).
 
 `serve` and `generate-token` share `tokens.json` under the configuration
 directory by default. The default configuration directory is `pages/` under
 the operating system's user config directory. `--config-dir` overrides
 `PAGES_CONFIG_DIR`; `--tokens-file` and `PAGES_TOKENS_FILE` select an exact
 Token file and take precedence over the directory.
+
+When the operating system does not provide a user config directory, the
+command must fail instead of using the current directory. An explicit
+`--config-dir`, `PAGES_CONFIG_DIR`, `--tokens-file`, or `PAGES_TOKENS_FILE`
+does not require the operating system default.
 
 `serve` responds to `GET /healthz` with `200` on the loopback listener.
 The path does not authenticate and discloses no state.
@@ -100,23 +106,22 @@ precedence defaults.
 
 | Input | Resolution |
 | --- | --- |
-| remote address | `--remote`, else `PAGES_REMOTE`, else `config.remote` |
-| mode | a remote address is set → remote; otherwise local |
-| local target | `PAGES_PUBLIC_ROOT`, else `config.public-root`, else current directory |
+| Destination | `--destination` or `--dest`, else `PAGES_DESTINATION`, else `config.destination`, else current directory |
+| mode | HTTP(S) URL Destination -> remote; local path Destination -> local |
 | slug | `--slug` only; the flag is required |
 | token | `PAGES_UPLOAD_TOKEN`, else the selected Token from the config file |
 | remote identity | env Token scope, else `--identity`, else `config.identity`, else Default Identity |
 | local identity | `--identity`, else `config.identity`, else Default Identity |
 
-The remote upload address is the only mode switch. Every other value is plain
-configuration. An absent Identity selects the hidden Default Identity. A
-Named Identity selects one entry from `config.identities`.
+Destination is the only mode input. Every other value is plain configuration.
+An absent Identity selects the hidden Default Identity. A Named Identity
+selects one entry from `config.identities`.
 
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --file | none | none | yes |
 | --slug | none | none | yes |
-| --remote | PAGES_REMOTE | none | no |
+| --destination, --dest | PAGES_DESTINATION | current directory | no |
 | --identity | none | Default Identity | no |
 | --timeout | none | 90s | no |
 | --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
@@ -129,8 +134,7 @@ environment values always win over the config file. JSON format:
 
 ```text literal
 {
-  "remote": "https://pages.example.com",
-  "public-root": "pages-public",
+  "destination": "https://pages.example.com",
   "token": "default-secret",
   "identities": {
     "bumble": "secret-one",
@@ -145,8 +149,12 @@ environment values always win over the config file. JSON format:
   directory. `--config-dir` overrides `PAGES_CONFIG_DIR`; `--config` names an
   exact file and takes precedence over the directory. A missing default file
   is fine; a named file must exist.
-- All fields are optional. `remote` is the remote upload address;
-  `public-root` is the local public root.
+- When the operating system does not provide a user config directory,
+  `publish` has no default config file. It continues without one and must not
+  search the current directory for `config.json`. `--config`, `--config-dir`,
+  or `PAGES_CONFIG_DIR` still supplies an explicit path.
+- All fields are optional. `destination` is a local path or an absolute
+  HTTP(S) URL.
 - `token` stores the Default Identity Token. `identities` maps each Named
   Identity to its secret. `identity` selects one Named Identity when the
   Publisher should not use the Default Identity.
@@ -156,7 +164,18 @@ environment values always win over the config file. JSON format:
 - `serve` does not read the config file. Its configuration stays
   explicit.
 
-Remote mode (a remote address is set):
+Destination syntax:
+
+- A value that starts with `http://` or `https://` must be an absolute URL
+  with a Host. It must not contain a query or fragment. It selects remote
+  mode and may contain a path prefix.
+- A value that starts with another URI scheme followed by `://` is invalid.
+- Every other value is a local OS path and selects local mode. This includes
+  relative paths, absolute paths, Windows drive paths, and UNC paths.
+- `--destination` and `--dest` are the same input. A command that sets both
+  is invalid, even when the values are equal.
+
+Remote mode (the Destination is an HTTP(S) URL):
 
 - The Token comes from `PAGES_UPLOAD_TOKEN` or the config file. A pure secret
   selects the Default Identity. `identity.secret` selects a Named Identity.
@@ -165,11 +184,11 @@ Remote mode (a remote address is set):
   `--identity` is ignored. Otherwise `--identity` or `config.identity` selects
   a Named Identity; without one, `config.token` supplies the Default Identity
   Token.
-- The public URL is `<remote>/<slug>/` for the Default Identity and
-  `<remote>/@<identity>/<slug>/` for a Named Identity.
+- The public URL is `<destination>/<slug>/` for the Default Identity and
+  `<destination>/@<identity>/<slug>/` for a Named Identity.
 - The server enforces the upload byte limit.
 
-Local mode (no remote address):
+Local mode (the Destination is a local path):
 
 - No server is involved. `PAGES_UPLOAD_TOKEN` is ignored. `--identity` or
   `config.identity` selects a Named Identity; without one, Publish uses the
@@ -181,9 +200,9 @@ Local mode (no remote address):
   security.
 - The target directory is a pages public root: `.pages/` staging is an
   inherent part of it, and the host must not serve it.
-- When neither `PAGES_PUBLIC_ROOT` nor `config.public-root` is set, the current
-  working directory is the Public Root. The Publisher resolves it when the
-  command starts and prints the resulting absolute Page directory.
+- When no Destination is set, the current working directory is the
+  Destination and Public Root. The Publisher resolves it when the command
+  starts and prints the resulting absolute Page directory.
 - The CLI does not lock. Two concurrent local publishes of the same
   slug are the caller's responsibility.
 
@@ -202,8 +221,8 @@ Common steps:
    swap it into `<dir>/<slug>/` or `<dir>/@<identity>/<slug>/`. A successful
    swap is the Verification.
 5. Remote mode prints the public URL with a trailing slash. Local mode prints
-   the absolute Page directory with a trailing slash. Both print exactly one
-   line and exit 0.
+   the absolute Page directory with the operating system's trailing path
+   separator. Both print exactly one line and exit 0.
 
 Any step failure prints one error line to stderr and exits 1. Usage errors
 exit 2.
@@ -232,8 +251,9 @@ Steps:
 3. Generate the secret: 32 random bytes, base64url without padding. The
    encoding never contains `.`.
 4. Hold an exclusive lock for the complete read, check, and write transaction.
-   Write the tokens file atomically (temporary file in the same directory,
-   then rename) with mode `0600`, keeping every other entry.
+   The lock must serialize calls in one process and calls from separate
+   processes. Write the tokens file atomically (temporary file in the same
+   directory, then rename) with mode `0600`, keeping every other entry.
 5. Print one line with the Token:
 
 ```text literal
@@ -249,16 +269,17 @@ A newly written Token takes effect on the next tokens reload of `serve`
 
 ## Examples
 ```text literal
-pages serve --public-root pages-public
+pages serve --destination pages-public
 
 pages generate-token bumble
 
-PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --remote https://pages.example.com
+PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --dest https://pages.example.com
 
 pages publish --file report.zip --slug report --config <user-config-dir>/pages/config.json
 ```
 
 ## Status
 
-Implemented. One `pages` binary with the three subcommands above. The Go
-module path is `github.com/suraciii/pages`.
+Implemented. One `pages` binary has the three subcommands above. Publish and
+Serve use the Destination grammar. The Go module path is
+`github.com/suraciii/pages`.

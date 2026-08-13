@@ -1,13 +1,13 @@
 package pages
 
 import (
-	"bytes"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/suraciii/pages/internal/filesystem"
 )
 
 func TestGenerateSecretFormatAndUniqueness(t *testing.T) {
@@ -67,7 +67,8 @@ func TestIdentityScope(t *testing.T) {
 }
 
 func TestReadTokensFileMissingYieldsEmptyTokens(t *testing.T) {
-	tokens, err := ReadTokensFile(filepath.Join(t.TempDir(), "missing.json"))
+	fileSystem := filesystem.NewMemory("/workspace")
+	tokens, err := ReadTokensFileWithFS(fileSystem, "/config/missing.json")
 	if err != nil {
 		t.Fatalf("read missing file: %v", err)
 	}
@@ -85,11 +86,10 @@ func TestReadTokensFileRejectsUnknownAndInvalidEntries(t *testing.T) {
 		"invalid name":   `{"identities":{"Bad":"secret"}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "tokens.json")
-			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-				t.Fatalf("write tokens: %v", err)
-			}
-			if _, err := ReadTokensFile(path); err == nil {
+			fileSystem := filesystem.NewMemory("/workspace")
+			path := "/config/tokens.json"
+			mustWriteMemoryFile(t, fileSystem, path, body)
+			if _, err := ReadTokensFileWithFS(fileSystem, path); err == nil {
 				t.Fatal("read succeeded, want error")
 			}
 		})
@@ -97,24 +97,28 @@ func TestReadTokensFileRejectsUnknownAndInvalidEntries(t *testing.T) {
 }
 
 func TestWriteTokensFileCreatesAndKeepsScopes(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "tokens.json")
+	fileSystem := filesystem.NewMemory("/workspace")
+	path := "/config/tokens.json"
+	if err := fileSystem.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("create config: %v", err)
+	}
 	tokens := Tokens{Token: "default-secret", Identities: map[string]string{"bumble": "secret-one"}}
-	if err := WriteTokensFile(path, tokens); err != nil {
+	if err := WriteTokensFileWithFS(fileSystem, path, tokens); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	tokens.Identities["fizz"] = "secret-two"
-	if err := WriteTokensFile(path, tokens); err != nil {
+	if err := WriteTokensFileWithFS(fileSystem, path, tokens); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	reloaded, err := ReadTokensFile(path)
+	reloaded, err := ReadTokensFileWithFS(fileSystem, path)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
 	if reloaded.Token != "default-secret" || reloaded.Identities["bumble"] != "secret-one" || reloaded.Identities["fizz"] != "secret-two" {
 		t.Fatalf("reloaded = %+v", reloaded)
 	}
-	info, err := os.Stat(path)
+	info, err := fileSystem.Stat(path)
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
@@ -124,25 +128,27 @@ func TestWriteTokensFileCreatesAndKeepsScopes(t *testing.T) {
 }
 
 func TestWriteTokensFileRejectsEmpty(t *testing.T) {
-	if err := WriteTokensFile(filepath.Join(t.TempDir(), "tokens.json"), Tokens{}); err == nil {
+	fileSystem := filesystem.NewMemory("/workspace")
+	if err := WriteTokensFileWithFS(fileSystem, "/config/tokens.json", Tokens{}); err == nil {
 		t.Fatal("write succeeded, want error for empty Tokens")
 	}
 }
 
 func TestIssueTokenCreatesPrivateParentDirectory(t *testing.T) {
-	parent := filepath.Join(t.TempDir(), "config", "pages")
+	fileSystem := filesystem.NewMemory("/workspace")
+	parent := "/config/pages"
 	path := filepath.Join(parent, "tokens.json")
-	if _, err := IssueToken(path, "", false); err != nil {
+	if _, err := IssueTokenWithFS(fileSystem, path, "", false); err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	info, err := os.Stat(parent)
+	info, err := fileSystem.Stat(parent)
 	if err != nil {
 		t.Fatalf("stat parent: %v", err)
 	}
 	if got := info.Mode().Perm(); got != 0o700 {
 		t.Fatalf("parent mode = %o, want 700", got)
 	}
-	info, err = os.Stat(path)
+	info, err = fileSystem.Stat(path)
 	if err != nil {
 		t.Fatalf("stat tokens: %v", err)
 	}
@@ -151,48 +157,45 @@ func TestIssueTokenCreatesPrivateParentDirectory(t *testing.T) {
 	}
 }
 
-func TestIssueTokenConcurrentProcessesKeepEveryIdentity(t *testing.T) {
-	if identity := os.Getenv("PAGES_TEST_ISSUE_IDENTITY"); identity != "" {
-		if _, err := IssueToken(os.Getenv("PAGES_TEST_ISSUE_PATH"), identity, false); err != nil {
+func TestIssueTokenConcurrentCallsKeepEveryIdentity(t *testing.T) {
+	const callCount = 12
+	fileSystem := filesystem.NewMemory("/workspace")
+	transactionFileSystem := unlockedFileSystem{FS: fileSystem}
+	path := "/config/tokens.json"
+	errorsChannel := make(chan error, callCount)
+	var waitGroup sync.WaitGroup
+	for index := range callCount {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			identity := "identity-" + strconv.Itoa(index)
+			_, err := IssueTokenWithFS(transactionFileSystem, path, identity, false)
+			errorsChannel <- err
+		}()
+	}
+	waitGroup.Wait()
+	close(errorsChannel)
+	for err := range errorsChannel {
+		if err != nil {
 			t.Fatalf("issue token: %v", err)
 		}
-		return
 	}
 
-	const processCount = 12
-	path := filepath.Join(t.TempDir(), "tokens.json")
-	type child struct {
-		command *exec.Cmd
-		output  bytes.Buffer
-	}
-	children := make([]child, processCount)
-	for index := range children {
-		identity := "identity-" + strconv.Itoa(index)
-		command := exec.Command(os.Args[0], "-test.run=^TestIssueTokenConcurrentProcessesKeepEveryIdentity$")
-		command.Env = append(os.Environ(),
-			"PAGES_TEST_ISSUE_IDENTITY="+identity,
-			"PAGES_TEST_ISSUE_PATH="+path,
-		)
-		children[index].command = command
-		command.Stdout = &children[index].output
-		command.Stderr = &children[index].output
-		if err := command.Start(); err != nil {
-			t.Fatalf("start child %d: %v", index, err)
-		}
-	}
-	for index := range children {
-		if err := children[index].command.Wait(); err != nil {
-			t.Fatalf("child %d: %v\n%s", index, err, children[index].output.String())
-		}
-	}
-
-	tokens, err := ReadTokensFile(path)
+	tokens, err := ReadTokensFileWithFS(fileSystem, path)
 	if err != nil {
 		t.Fatalf("read tokens: %v", err)
 	}
-	if len(tokens.Identities) != processCount {
-		t.Fatalf("identities = %d, want %d", len(tokens.Identities), processCount)
+	if len(tokens.Identities) != callCount {
+		t.Fatalf("identities = %d, want %d", len(tokens.Identities), callCount)
 	}
+}
+
+type unlockedFileSystem struct {
+	filesystem.FS
+}
+
+func (unlockedFileSystem) Lock(string) (func(), error) {
+	return func() {}, nil
 }
 
 func TestAuthenticateDefaultAndNamed(t *testing.T) {

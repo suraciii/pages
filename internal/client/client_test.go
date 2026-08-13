@@ -1,21 +1,58 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/suraciii/pages/internal/filesystem"
 	"github.com/suraciii/pages/internal/pages"
 )
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
+
+func testHTTPClient(handler func(*http.Request) *http.Response) *http.Client {
+	return &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return handler(request), nil
+	})}
+}
+
+func response(status int, contentType string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Status:     fmt.Sprintf("%d %s", status, http.StatusText(status)),
+		Header:     http.Header{"Content-Type": []string{contentType}},
+		Body:       io.NopCloser(strings.NewReader("")),
+	}
+}
+
+func memoryPage(t *testing.T, path, content string) *filesystem.Memory {
+	t.Helper()
+	fileSystem := filesystem.NewMemory("/workspace")
+	if err := fileSystem.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create parent: %v", err)
+	}
+	if err := fileSystem.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write page: %v", err)
+	}
+	return fileSystem
+}
+
 func TestPublisherUploadsAndVerifiesIdentityPage(t *testing.T) {
+	filePath := "/source/page.html"
+	fileSystem := memoryPage(t, filePath, "<!doctype html><h1>Ticket</h1>")
 	var uploadedBody string
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	client := testHTTPClient(func(request *http.Request) *http.Response {
 		switch request.Method {
 		case http.MethodPost:
 			if got, want := request.URL.Path, "/ticket-status"; got != want {
@@ -29,30 +66,23 @@ func TestPublisherUploadsAndVerifiesIdentityPage(t *testing.T) {
 				t.Errorf("read body: %v", err)
 			}
 			uploadedBody = string(body)
-			writer.WriteHeader(http.StatusNoContent)
+			return response(http.StatusNoContent, "")
 		case http.MethodGet:
 			if got, want := request.URL.Path, "/@bumble/ticket-status/"; got != want {
 				t.Errorf("verify path = %q, want %q", got, want)
 			}
-			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-			writer.WriteHeader(http.StatusOK)
+			return response(http.StatusOK, "text/html; charset=utf-8")
 		default:
-			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return response(http.StatusMethodNotAllowed, "")
 		}
-	}))
-	defer server.Close()
-
-	filePath := filepath.Join(t.TempDir(), "page.html")
-	if err := os.WriteFile(filePath, []byte("<!doctype html><h1>Ticket</h1>"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
-	publisher := Publisher{BaseURL: server.URL, Token: "bumble.secret-one", HTTPClient: server.Client()}
+	})
+	publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one", HTTPClient: client, FileSystem: fileSystem}
 
 	publicURL, err := publisher.Publish(context.Background(), filePath, "ticket-status")
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if got, want := publicURL, server.URL+"/@bumble/ticket-status/"; got != want {
+	if got, want := publicURL, "https://pages.example.com/@bumble/ticket-status/"; got != want {
 		t.Fatalf("public URL = %q, want %q", got, want)
 	}
 	if got, want := uploadedBody, "<!doctype html><h1>Ticket</h1>"; got != want {
@@ -61,69 +91,48 @@ func TestPublisherUploadsAndVerifiesIdentityPage(t *testing.T) {
 }
 
 func TestPublisherFailsWhenPublicPageIsNotHTML(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	fileSystem := memoryPage(t, "/source/page.html", "page")
+	client := testHTTPClient(func(request *http.Request) *http.Response {
 		if request.Method == http.MethodPost {
-			writer.WriteHeader(http.StatusNoContent)
-			return
+			return response(http.StatusNoContent, "")
 		}
-		writer.Header().Set("Content-Type", "text/plain")
-		writer.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
+		return response(http.StatusOK, "text/plain")
+	})
+	publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one", HTTPClient: client, FileSystem: fileSystem}
 
-	filePath := filepath.Join(t.TempDir(), "page.html")
-	if err := os.WriteFile(filePath, []byte("page"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
-	publisher := Publisher{BaseURL: server.URL, Token: "bumble.secret-one", HTTPClient: server.Client()}
-
-	if _, err := publisher.Publish(context.Background(), filePath, "ticket-status"); err == nil {
+	if _, err := publisher.Publish(context.Background(), "/source/page.html", "ticket-status"); err == nil {
 		t.Fatal("publish succeeded, want verification error")
 	}
 }
 
 func TestPublisherUploadsZipWithZipContentType(t *testing.T) {
+	fileSystem := memoryPage(t, "/source/page.zip", "zip bytes")
 	var uploadedContentType string
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		switch request.Method {
-		case http.MethodPost:
+	client := testHTTPClient(func(request *http.Request) *http.Response {
+		if request.Method == http.MethodPost {
 			uploadedContentType = request.Header.Get("Content-Type")
-			writer.WriteHeader(http.StatusNoContent)
-		case http.MethodGet:
-			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-			writer.WriteHeader(http.StatusOK)
-		default:
-			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return response(http.StatusNoContent, "")
 		}
-	}))
-	defer server.Close()
+		return response(http.StatusOK, "text/html; charset=utf-8")
+	})
+	publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one", HTTPClient: client, FileSystem: fileSystem}
 
-	filePath := filepath.Join(t.TempDir(), "page.zip")
-	if err := os.WriteFile(filePath, []byte("zip bytes"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
-	publisher := Publisher{BaseURL: server.URL, Token: "bumble.secret-one", HTTPClient: server.Client()}
-
-	publicURL, err := publisher.Publish(context.Background(), filePath, "ticket-status")
+	publicURL, err := publisher.Publish(context.Background(), "/source/page.zip", "ticket-status")
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if got, want := uploadedContentType, "application/zip"; got != want {
-		t.Fatalf("content type = %q, want %q", got, want)
+	if uploadedContentType != "application/zip" {
+		t.Fatalf("content type = %q", uploadedContentType)
 	}
-	if got, want := publicURL, server.URL+"/@bumble/ticket-status/"; got != want {
-		t.Fatalf("public URL = %q, want %q", got, want)
+	if publicURL != "https://pages.example.com/@bumble/ticket-status/" {
+		t.Fatalf("public URL = %q", publicURL)
 	}
 }
 
 func TestPublisherRejectsUnsupportedExtension(t *testing.T) {
-	filePath := filepath.Join(t.TempDir(), "page.txt")
-	if err := os.WriteFile(filePath, []byte("page"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
-	publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one"}
-
-	if _, err := publisher.Publish(context.Background(), filePath, "ticket-status"); err == nil {
+	fileSystem := memoryPage(t, "/source/page.txt", "page")
+	publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one", FileSystem: fileSystem}
+	if _, err := publisher.Publish(context.Background(), "/source/page.txt", "ticket-status"); err == nil {
 		t.Fatal("publish succeeded, want extension error")
 	}
 }
@@ -139,52 +148,47 @@ func TestNormalizeBaseURLRejectsQueryAndFragment(t *testing.T) {
 	}
 }
 
+func TestNormalizeBaseURLAcceptsCaseInsensitiveHTTPS(t *testing.T) {
+	parsed, err := normalizeBaseURL("HTTPS://pages.example.com/docs")
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if parsed.Host != "pages.example.com" || parsed.Path != "/docs" {
+		t.Fatalf("parsed URL = %s", parsed)
+	}
+}
+
 func TestPublisherPublishesThroughServerAndStaticRoute(t *testing.T) {
-	root := t.TempDir()
-	publicRoot := filepath.Join(root, "public")
+	fileSystem := memoryPage(t, "/source/page.html", "<!doctype html><h1>Published</h1>")
+	publicRoot := "/public"
 	pageServer, err := pages.NewServer(pages.ServerConfig{
 		PublicRoot:     publicRoot,
 		Tokens:         pages.Tokens{Identities: map[string]string{"bumble": "secret-one"}},
 		MaxUploadBytes: 1024,
+		FileSystem:     fileSystem,
 	})
 	if err != nil {
 		t.Fatalf("new pages server: %v", err)
 	}
-	staticPages := http.FileServer(http.Dir(publicRoot))
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method == http.MethodPost {
-			pageServer.ServeHTTP(writer, request)
-			return
-		}
-		staticPages.ServeHTTP(writer, request)
-	}))
-	defer server.Close()
+	client := inProcessPagesClient(t, pageServer, fileSystem, publicRoot)
+	publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one", HTTPClient: client, FileSystem: fileSystem}
 
-	filePath := filepath.Join(root, "page.html")
-	if err := os.WriteFile(filePath, []byte("<!doctype html><h1>Published</h1>"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
-	publisher := Publisher{BaseURL: server.URL, Token: "bumble.secret-one", HTTPClient: server.Client()}
-
-	publicURL, err := publisher.Publish(context.Background(), filePath, "overview")
+	publicURL, err := publisher.Publish(context.Background(), "/source/page.html", "overview")
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if got, want := publicURL, server.URL+"/@bumble/overview/"; got != want {
-		t.Fatalf("public URL = %q, want %q", got, want)
+	if publicURL != "https://pages.example.com/@bumble/overview/" {
+		t.Fatalf("public URL = %q", publicURL)
 	}
-	page, err := os.ReadFile(filepath.Join(publicRoot, "@bumble", "overview", "index.html"))
-	if err != nil {
-		t.Fatalf("read published page: %v", err)
-	}
-	if got, want := string(page), "<!doctype html><h1>Published</h1>"; got != want {
-		t.Fatalf("page = %q, want %q", got, want)
+	page, err := fileSystem.ReadFile("/public/@bumble/overview/index.html")
+	if err != nil || string(page) != "<!doctype html><h1>Published</h1>" {
+		t.Fatalf("page = %q, %v", page, err)
 	}
 }
 
 func TestPublisherPublishesDefaultAndNamedThroughOneOrigin(t *testing.T) {
-	root := t.TempDir()
-	publicRoot := filepath.Join(root, "public")
+	fileSystem := filesystem.NewMemory("/workspace")
+	publicRoot := "/public"
 	pageServer, err := pages.NewServer(pages.ServerConfig{
 		PublicRoot: publicRoot,
 		Tokens: pages.Tokens{
@@ -192,29 +196,25 @@ func TestPublisherPublishesDefaultAndNamedThroughOneOrigin(t *testing.T) {
 			Identities: map[string]string{"bumble": "secret-one"},
 		},
 		MaxUploadBytes: 1024,
+		FileSystem:     fileSystem,
 	})
 	if err != nil {
 		t.Fatalf("new pages server: %v", err)
 	}
-	staticPages := http.FileServer(http.Dir(publicRoot))
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method == http.MethodPost {
-			pageServer.ServeHTTP(writer, request)
-			return
-		}
-		staticPages.ServeHTTP(writer, request)
-	}))
-	defer server.Close()
+	client := inProcessPagesClient(t, pageServer, fileSystem, publicRoot)
 
 	for token, wantURL := range map[string]string{
-		"default-secret":    server.URL + "/report/",
-		"bumble.secret-one": server.URL + "/@bumble/report/",
+		"default-secret":    "https://pages.example.com/report/",
+		"bumble.secret-one": "https://pages.example.com/@bumble/report/",
 	} {
-		filePath := filepath.Join(root, strings.ReplaceAll(token, ".", "-")+".html")
-		if err := os.WriteFile(filePath, []byte("<!doctype html><h1>Published</h1>"), 0o600); err != nil {
+		filePath := filepath.Join("/source", strings.ReplaceAll(token, ".", "-")+".html")
+		if err := fileSystem.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+			t.Fatalf("create source: %v", err)
+		}
+		if err := fileSystem.WriteFile(filePath, []byte("<!doctype html><h1>Published</h1>"), 0o644); err != nil {
 			t.Fatalf("write page: %v", err)
 		}
-		publicURL, err := (Publisher{BaseURL: server.URL, Token: token, HTTPClient: server.Client()}).Publish(context.Background(), filePath, "report")
+		publicURL, err := (Publisher{BaseURL: "https://pages.example.com", Token: token, HTTPClient: client, FileSystem: fileSystem}).Publish(context.Background(), filePath, "report")
 		if err != nil {
 			t.Fatalf("publish %q: %v", token, err)
 		}
@@ -225,32 +225,46 @@ func TestPublisherPublishesDefaultAndNamedThroughOneOrigin(t *testing.T) {
 }
 
 func TestPublisherVerifiesDefaultIdentityPage(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		switch request.Method {
-		case http.MethodPost:
+	fileSystem := memoryPage(t, "/source/page.html", "page")
+	client := testHTTPClient(func(request *http.Request) *http.Response {
+		if request.Method == http.MethodPost {
 			if got := request.Header.Get("Authorization"); got != "Bearer default-secret" {
 				t.Errorf("authorization = %q", got)
 			}
-			writer.WriteHeader(http.StatusNoContent)
-		case http.MethodGet:
-			if got, want := request.URL.Path, "/report/"; got != want {
-				t.Errorf("verify path = %q, want %q", got, want)
-			}
-			writer.Header().Set("Content-Type", "text/html")
-			writer.WriteHeader(http.StatusOK)
+			return response(http.StatusNoContent, "")
 		}
-	}))
-	defer server.Close()
-
-	filePath := filepath.Join(t.TempDir(), "page.html")
-	if err := os.WriteFile(filePath, []byte("page"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
-	publicURL, err := (Publisher{BaseURL: server.URL, Token: "default-secret", HTTPClient: server.Client()}).Publish(context.Background(), filePath, "report")
+		if got, want := request.URL.Path, "/report/"; got != want {
+			t.Errorf("verify path = %q, want %q", got, want)
+		}
+		return response(http.StatusOK, "text/html")
+	})
+	publicURL, err := (Publisher{BaseURL: "https://pages.example.com", Token: "default-secret", HTTPClient: client, FileSystem: fileSystem}).Publish(context.Background(), "/source/page.html", "report")
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if got, want := publicURL, server.URL+"/report/"; got != want {
-		t.Fatalf("public URL = %q, want %q", got, want)
+	if publicURL != "https://pages.example.com/report/" {
+		t.Fatalf("public URL = %q", publicURL)
 	}
+}
+
+func inProcessPagesClient(t *testing.T, server http.Handler, fileSystem filesystem.FS, publicRoot string) *http.Client {
+	t.Helper()
+	return testHTTPClient(func(request *http.Request) *http.Response {
+		if request.Method == http.MethodPost {
+			recorder := httptest.NewRecorder()
+			server.ServeHTTP(recorder, request)
+			return recorder.Result()
+		}
+		path := filepath.Join(publicRoot, filepath.FromSlash(strings.TrimPrefix(request.URL.Path, "/")), "index.html")
+		body, err := fileSystem.ReadFile(path)
+		if err != nil {
+			return response(http.StatusNotFound, "text/plain")
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+			Body:       io.NopCloser(bytes.NewReader(body)),
+		}
+	})
 }

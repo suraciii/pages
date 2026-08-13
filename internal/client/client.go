@@ -6,11 +6,11 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/suraciii/pages/internal/filesystem"
 	"github.com/suraciii/pages/internal/pages"
 )
 
@@ -18,7 +18,10 @@ import (
 type Publisher struct {
 	BaseURL    string
 	Token      string
-	HTTPClient *http.Client
+	HTTPClient interface {
+		Do(*http.Request) (*http.Response, error)
+	}
+	FileSystem filesystem.FS
 }
 
 func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (string, error) {
@@ -34,7 +37,11 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 		return "", err
 	}
 
-	file, err := os.Open(filePath)
+	fileSystem := publisher.FileSystem
+	if fileSystem == nil {
+		fileSystem = filesystem.OS
+	}
+	file, err := fileSystem.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("open page file: %w", err)
 	}
@@ -100,11 +107,11 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 
 func normalizeBaseURL(rawURL string) (*url.URL, error) {
 	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, fmt.Errorf("remote address must be an absolute HTTP(S) URL")
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) {
+		return nil, fmt.Errorf("destination must be an absolute HTTP(S) URL")
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return nil, fmt.Errorf("remote address must not contain a query or fragment")
+		return nil, fmt.Errorf("destination must not contain a query or fragment")
 	}
 	return parsed, nil
 }

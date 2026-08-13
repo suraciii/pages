@@ -8,8 +8,8 @@ allowed-tools: Bash(pages:*)
 
 Publish one `index.html` file, or one directory of files, to a public
 site. Each publish replaces the Page at the same slug. The live address
-is `<remote>/<slug>/` for the Default Identity or
-`<remote>/@<identity>/<slug>/` for a Named Identity.
+is `<destination>/<slug>/` for the Default Identity or
+`<destination>/@<identity>/<slug>/` for a Named Identity.
 
 ## Publish (the core action)
 
@@ -18,7 +18,7 @@ the live address:
 
 ```bash
 PAGES_UPLOAD_TOKEN=7v9A_example-secret pages publish \
-  --file report.html --slug report --remote https://pages.example.com
+  --file report.html --slug report --dest https://pages.example.com
 ```
 
 Local mode — no service; the machine needs write access to a public
@@ -37,10 +37,12 @@ publish, the Page is live.
 
 ## How the inputs work
 
-`--remote` is the only mode switch: set it for remote mode, leave it out for
-local mode. A pure-secret Token uses the Default Identity. An
-`identity.secret` Token uses a Named Identity. Local mode uses the Default
-Identity unless `--identity` selects a Named Identity. Run
+Destination is the only mode input. A local path selects local mode. An
+absolute HTTP(S) URL selects remote mode. Set it with `--destination`, its
+`--dest` alias, `PAGES_DESTINATION`, or `config.destination`. An omitted
+Destination uses the current directory. A pure-secret Token uses the Default
+Identity. An `identity.secret` Token uses a Named Identity. Local mode uses
+the Default Identity unless `--identity` selects a Named Identity. Run
 `pages publish --help` for every flag and default.
 
 ## When you administer the service

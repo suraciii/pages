@@ -44,6 +44,12 @@ lives. Remote mode Uploads through the service and verifies the public
 URL. Local mode writes directly into a Public Root and returns its path.
 _Avoid_: deploy, release, push
 
+**Destination**:
+Where Publish puts a Page. A local path is a Public Root and selects local
+mode. An absolute HTTP(S) URL is an Upload and Verification endpoint and
+selects remote mode. An omitted Destination is the current directory.
+_Avoid_: remote, target, mode switch
+
 **Public Root**:
 The directory that the static host serves. The server writes Pages under
 `<slug>/index.html` for the Default Identity and

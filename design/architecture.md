@@ -22,6 +22,11 @@ loopback write path and a public read path.
 `<public-root>/<slug>`. A Named Identity target is
 `<public-root>/@<identity>/<slug>`. The root file is `index.html`.
 
+**Destination** — where `pages publish` sends a Page. A local path resolves
+to a Public Root. An absolute HTTP(S) URL resolves to the public Upload and
+Verification route. `pages serve` accepts only the local-path form and uses
+it as its Public Root.
+
 **Identity** — the namespace that owns a Page. The Default Identity is the
 empty internal value. A Named Identity is a valid name. The server derives it
 from the verified Token. The upload path must not name an Identity.
