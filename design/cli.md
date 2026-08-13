@@ -293,9 +293,10 @@ skill is embedded in the binary so its instructions and command grammar have
 the same version.
 
 The separately distributed bootstrap skill is intentionally incomplete. It
-checks for `pages`, directs the user to install it when absent or upgrade it
-when `pages skill` is unavailable, then runs `pages skill` and follows that
-output. It must not copy operational command syntax that can become stale.
+tries `pages skill`. When the CLI is absent or does not support that command,
+it runs `go install github.com/suraciii/pages@latest`, then runs `pages skill`
+and follows that output. It must not manage the user's shell or copy
+operational command syntax that can become stale.
 
 ## Examples
 ```text literal
