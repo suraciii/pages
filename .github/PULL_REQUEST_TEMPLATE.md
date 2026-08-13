@@ -1,8 +1,8 @@
-## 改动
+## Change
 
-<!-- 一句话说明这次改动 -->
+<!-- One sentence describing this change -->
 
-## 验证
+## Verification
 
-- [ ] `make ci` 通过
-- [ ] 相关测试或文档已更新
+- [ ] `make ci` passes
+- [ ] Related tests or docs are updated

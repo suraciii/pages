@@ -1,17 +1,17 @@
-## 描述
+## Summary
 
-<!-- 遇到的问题，或希望添加的功能 -->
+<!-- What happened, or what feature you want -->
 
-## 复现步骤
+## Repro Steps
 
 <!-- 1. 2. 3. -->
 
-## 期望与实际
+## Expected And Actual
 
-- 期望：
-- 实际：
+- Expected:
+- Actual:
 
-## 环境
+## Environment
 
-- pages 版本（`pages -version`）：
-- 操作系统：
+- pages version (`pages -version`):
+- Operating system:
