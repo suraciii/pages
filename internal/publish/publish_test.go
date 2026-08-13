@@ -55,7 +55,7 @@ func TestResolveLocalModeWithoutTargetIsUsageError(t *testing.T) {
 }
 
 func TestResolveRemoteModeRequiresToken(t *testing.T) {
-	t.Setenv("PAGES_BASE_URL", "https://pages.example.com")
+	t.Setenv("PAGES_REMOTE", "https://pages.example.com")
 	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute})
 	if !errors.Is(err, ErrUsage) {
 		t.Fatalf("err = %v, want usage error", err)
@@ -64,7 +64,7 @@ func TestResolveRemoteModeRequiresToken(t *testing.T) {
 
 func TestResolveRemoteTokenFromConfigCombinesSecret(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.json")
-	config := `{"base-url": "https://pages.example.com", "tokens": {"bumble": "secret"}}`
+	config := `{"remote": "https://pages.example.com", "tokens": {"bumble": "secret"}}`
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}

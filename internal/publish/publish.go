@@ -22,7 +22,7 @@ var ErrUsage = errors.New("usage")
 
 // Config is the publish config file. Every field is optional.
 type Config struct {
-	BaseURL    string            `json:"base-url"`
+	Remote     string            `json:"remote"`
 	PublicRoot string            `json:"public-root"`
 	Tokens     map[string]string `json:"tokens"`
 	Identity   string            `json:"identity"`
@@ -57,7 +57,7 @@ func LoadConfig(path string) (*Config, error) {
 type Input struct {
 	File       string
 	Slug       string
-	BaseURL    string
+	Remote     string
 	Identity   string
 	Timeout    time.Duration
 	ConfigPath string
@@ -65,14 +65,14 @@ type Input struct {
 
 // Resolved is the publish command line after resolution.
 type Resolved struct {
-	File        string
-	Slug        string
-	Remote      bool
-	BaseURL     string
-	LocalTarget string
-	Identity    string
-	Token       string
-	Timeout     time.Duration
+	File          string
+	Slug          string
+	Remote        bool
+	RemoteAddress string
+	LocalTarget   string
+	Identity      string
+	Token         string
+	Timeout       time.Duration
 }
 
 // Resolve derives every input in the spec order. A resolved value that
@@ -99,7 +99,7 @@ func Resolve(input Input) (*Resolved, error) {
 		return nil, fmt.Errorf("%w: -file must not be a directory; package it as a zip", ErrUsage)
 	}
 
-	remoteAddress := firstNonEmpty(input.BaseURL, os.Getenv("PAGES_BASE_URL"), config.BaseURL)
+	remoteAddress := firstNonEmpty(input.Remote, os.Getenv("PAGES_REMOTE"), config.Remote)
 	remote := remoteAddress != ""
 
 	environmentToken := os.Getenv("PAGES_UPLOAD_TOKEN")
@@ -137,13 +137,13 @@ func Resolve(input Input) (*Resolved, error) {
 	}
 
 	resolved := &Resolved{
-		File:     input.File,
-		Slug:     input.Slug,
-		Remote:   remote,
-		BaseURL:  remoteAddress,
-		Identity: identity,
-		Token:    token,
-		Timeout:  input.Timeout,
+		File:          input.File,
+		Slug:          input.Slug,
+		Remote:        remote,
+		RemoteAddress: remoteAddress,
+		Identity:      identity,
+		Token:         token,
+		Timeout:       input.Timeout,
 	}
 	if !remote {
 		resolved.LocalTarget = firstNonEmpty(os.Getenv("PAGES_PUBLIC_ROOT"), config.PublicRoot)
@@ -161,7 +161,7 @@ func Run(resolved *Resolved) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resolved.Timeout)
 	defer cancel()
-	publisher := client.Publisher{BaseURL: resolved.BaseURL, Token: resolved.Token}
+	publisher := client.Publisher{BaseURL: resolved.RemoteAddress, Token: resolved.Token}
 	return publisher.Publish(ctx, resolved.File, resolved.Slug)
 }
 

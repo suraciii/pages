@@ -26,7 +26,7 @@ publisher ──POST /<slug>──► static host ──proxy──► pages ser
 ```
 
 The deployment chooses the public root once and gives the same value to
-`pages serve -public-root` and to the static host's document root.
+`pages serve --public-root` and to the static host's document root.
 
 The tokens file must sit outside the public root and outside every host
 document root.
@@ -35,7 +35,7 @@ document root.
 
 A host that serves the public root must:
 
-- Serve the public root read-only at the base URL path.
+- Serve the public root read-only at the remote address path.
 - Never serve `/.pages/` or other dot-prefixed paths. The staging area is
   not public.
 - Proxy `POST /<slug>` to the loopback server when `pages publish`
@@ -44,12 +44,12 @@ A host that serves the public root must:
   verification cannot run.
 - Send the reference headers below, or equivalents.
 
-The base URL is fully custom: any host and any path prefix. A deployment
+The remote address is fully custom: any host and any path prefix. A deployment
 that mounts the public root under a prefix, for example `handle_path
-/docs/*`, uses that prefix in `-base-url`, and uploads go to
-`POST <base-url>/<slug>`.
+/docs/*`, uses that prefix in `--remote`, and uploads go to
+`POST <remote>/<slug>`.
 
-`pages publish` always uploads and verifies through one public base URL,
+`pages publish` always uploads and verifies through one remote address,
 so a full deployment needs a host with both routes.
 
 ## Caddy reference
@@ -93,7 +93,7 @@ file_server
   static handler. `/.pages/*` never serves: the staging area is not
   public. The server also rejects non-POST methods: host routing is the
   primary boundary and the server check is defense in depth.
-- The host body limit and `pages serve -max-upload-bytes` must be the
+- The host body limit and `pages serve --max-upload-bytes` must be the
   same value. The host enforces the limit for the public; the server
   enforces it for the loopback hop. Operators change both together.
 - The CSP header blocks script execution: pages are static display

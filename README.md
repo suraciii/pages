@@ -14,9 +14,9 @@ The service intentionally does not implement archives, revisions, histories, rol
 Issue a Token, run the service, publish a page:
 
 ```bash
-pages generate-token -tokens-file /etc/pages/tokens.json bumble
-pages serve -public-root /srv/pages/public -tokens-file /etc/pages/tokens.json
-pages publish -file report.html -slug report -base-url https://pages.example.com
+pages generate-token --tokens-file /etc/pages/tokens.json bumble
+pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
+pages publish --file report.html --slug report --remote https://pages.example.com
 ```
 
 `pages publish` prints the public URL when the page is live:
@@ -26,7 +26,7 @@ https://pages.example.com/bumble/report/
 ```
 
 `generate-token` creates the tokens file when it is missing. Without
-`-base-url`, `pages publish` writes straight into a local public root
+`--remote`, `pages publish` writes straight into a local public root
 and no server runs. Walk through the complete setup in
 [docs/getting-started.md](docs/getting-started.md).
 
@@ -52,10 +52,10 @@ The server derives identity from the verified token, never from an upload path, 
 The public address is:
 
 ```text
-<base-url>/<identity>/<slug>/
+<remote>/<identity>/<slug>/
 ```
 
-The base URL is the publisher's remote address, fully custom: any host
+The remote address is the publisher's target, fully custom: any host
 and any path prefix the user chooses.
 
 The server stages each upload under `<public-root>/.pages/` and swaps it into place with same-filesystem renames, so readers observe the complete old page or complete new page. Durability is best-effort: after a machine crash, publishing again restores the page.
@@ -95,8 +95,8 @@ Run the server:
 
 ```bash
 go run ./cmd/pages serve \
-  -public-root "$PWD/.scratch/public" \
-  -tokens-file "$PWD/.scratch/tokens.json"
+  --public-root "$PWD/.scratch/public" \
+  --tokens-file "$PWD/.scratch/tokens.json"
 ```
 
 Smoke-test a direct local server with `curl`. The token identity supplies the target namespace:
@@ -115,13 +115,13 @@ serves the public directory:
 
 ```bash
 go run ./cmd/pages publish \
-  -file ./example.html \
-  -slug hello \
-  -base-url https://pages.example.com
+  --file ./example.html \
+  --slug hello \
+  --remote https://pages.example.com
 ```
 
 `pages publish` verifies the public URL after uploading before it prints
-that URL. A `.zip` file publishes a directory page. Without `-base-url`,
+that URL. A `.zip` file publishes a directory page. Without `--remote`,
 `pages publish` writes directly into the public root from
 `PAGES_PUBLIC_ROOT` or the config file; no service is involved.
 

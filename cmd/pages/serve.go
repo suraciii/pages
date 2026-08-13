@@ -20,6 +20,7 @@ const defaultUploadLimit = 10485760
 
 func runServe(args []string) int {
 	flags := flag.NewFlagSet("pages serve", flag.ExitOnError)
+	flags.Usage = subcommandUsage(flags, "Usage: pages serve [flags]")
 	listenAddress := flags.String("listen", envOr("PAGES_LISTEN_ADDR", "127.0.0.1:3103"), "loopback listen address")
 	publicRoot := flags.String("public-root", os.Getenv("PAGES_PUBLIC_ROOT"), "static-resources directory (required)")
 	tokensFile := flags.String("tokens-file", os.Getenv("PAGES_TOKENS_FILE"), "identity token JSON file (required)")
@@ -27,12 +28,12 @@ func runServe(args []string) int {
 	flags.Parse(args)
 
 	if *publicRoot == "" || *tokensFile == "" {
-		fmt.Fprintln(os.Stderr, "pages serve: -public-root and -tokens-file are required")
+		fmt.Fprintln(os.Stderr, "pages serve: --public-root and --tokens-file are required")
 		flags.Usage()
 		return 2
 	}
 	if *maxUploadBytes <= 0 {
-		fmt.Fprintln(os.Stderr, "pages serve: -max-upload-bytes must be positive")
+		fmt.Fprintln(os.Stderr, "pages serve: --max-upload-bytes must be positive")
 		return 2
 	}
 

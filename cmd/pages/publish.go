@@ -13,9 +13,10 @@ import (
 
 func runPublish(args []string) int {
 	flags := flag.NewFlagSet("pages publish", flag.ExitOnError)
+	flags.Usage = subcommandUsage(flags, "Usage: pages publish [flags]")
 	filePath := flags.String("file", "", "HTML or zip file to publish (required)")
 	slug := flags.String("slug", "", "page slug (required)")
-	baseURL := flags.String("base-url", "", "remote upload address; selects remote mode")
+	remote := flags.String("remote", "", "remote upload address; selects remote mode")
 	identity := flags.String("identity", "", "identity; derived when empty")
 	timeout := flags.Duration("timeout", 90*time.Second, "upload and verification timeout")
 	configFlag := flags.String("config", defaultConfigPath(), "config file")
@@ -37,7 +38,7 @@ func runPublish(args []string) int {
 	resolved, err := publish.Resolve(publish.Input{
 		File:       *filePath,
 		Slug:       *slug,
-		BaseURL:    *baseURL,
+		Remote:     *remote,
 		Identity:   *identity,
 		Timeout:    *timeout,
 		ConfigPath: configPath,

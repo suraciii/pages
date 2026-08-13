@@ -10,6 +10,7 @@ import (
 
 func runGenerateToken(args []string) int {
 	flags := flag.NewFlagSet("pages generate-token", flag.ExitOnError)
+	flags.Usage = subcommandUsage(flags, "Usage: pages generate-token [flags] <identity>")
 	tokensFile := flags.String("tokens-file", envOr("PAGES_TOKENS_FILE", ""), "identity token JSON file (required)")
 	replace := flags.Bool("replace", false, "replace an existing identity entry")
 	flags.Parse(args)
@@ -22,7 +23,7 @@ func runGenerateToken(args []string) int {
 	}
 	identity := positional[0]
 	if *tokensFile == "" {
-		fmt.Fprintln(os.Stderr, "pages generate-token: -tokens-file is required")
+		fmt.Fprintln(os.Stderr, "pages generate-token: --tokens-file is required")
 		flags.Usage()
 		return 2
 	}
@@ -37,7 +38,7 @@ func runGenerateToken(args []string) int {
 		return 1
 	}
 	if _, exists := tokens[identity]; exists && !*replace {
-		fmt.Fprintf(os.Stderr, "pages generate-token: identity %q already exists; use -replace to rotate\n", identity)
+		fmt.Fprintf(os.Stderr, "pages generate-token: identity %q already exists; use --replace to rotate\n", identity)
 		return 1
 	}
 

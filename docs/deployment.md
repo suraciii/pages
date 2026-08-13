@@ -50,7 +50,7 @@ After=network.target
 
 [Service]
 User=pages
-ExecStart=/usr/local/bin/pages serve -public-root /srv/pages/public -tokens-file /etc/pages/tokens.json
+ExecStart=/usr/local/bin/pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 
@@ -74,7 +74,7 @@ Operate the service:
   exits 0.
 
 When the static host runs as a container, the container cannot reach the
-server on `127.0.0.1`. Start `pages serve` with `-listen 172.17.0.1:3103`
+server on `127.0.0.1`. Start `pages serve` with `--listen 172.17.0.1:3103`
 (the Docker gateway) or use a host-network container; the address stays
 private to the host.
 
@@ -141,4 +141,4 @@ The `request_body max_size` value must match `PAGES_MAX_UPLOAD_BYTES`.
 A path prefix is a choice, not a requirement: with
 `handle_path /docs/*` instead of `file_server`, the same site lives at
 `https://pages.example.com/docs/...`. Set the same prefix in
-`-base-url`.
+`--remote`.

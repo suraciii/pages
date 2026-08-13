@@ -4,16 +4,16 @@ A Publisher puts one Page in place and gets back where it lives.
 
 ## Two ways to publish
 
-The remote upload address is the only mode switch: `-base-url` or
-`PAGES_BASE_URL` selects remote mode. Without it, publishing is local,
+The remote upload address is the only mode switch: `--remote` or
+`PAGES_REMOTE` selects remote mode. Without it, publishing is local,
 into the public root from `PAGES_PUBLIC_ROOT` or the config file at
-`~/.config/pages/config.json` (or `-config`).
+`~/.config/pages/config.json` (or `--config`).
 
 Remote mode publishes through the running service, and the command
 verifies the public URL:
 
 ```text literal
-PAGES_UPLOAD_TOKEN='bumble.secret' pages publish -file report.zip -slug report -base-url https://pages.example.com
+PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --remote https://pages.example.com
 https://pages.example.com/bumble/report/
 ```
 
@@ -22,7 +22,7 @@ The public root comes from `PAGES_PUBLIC_ROOT`. No service and no
 network are involved; the Identity is named explicitly:
 
 ```text literal
-PAGES_PUBLIC_ROOT=/srv/pages/public pages publish -file report.zip -slug report -identity bumble
+PAGES_PUBLIC_ROOT=/srv/pages/public pages publish --file report.zip --slug report --identity bumble
 /srv/pages/public/bumble/report/
 ```
 
@@ -32,27 +32,27 @@ PAGES_PUBLIC_ROOT=/srv/pages/public pages publish -file report.zip -slug report 
    Identity: `bumble.secret` publishes under `bumble`. The owner issues
    Tokens with `pages generate-token`.
 2. Publish a file with `pages publish`. The file is one standalone HTML
-   document, or a zip with `index.html` at its root. `-base-url` or
-   `PAGES_BASE_URL` publishes through the service; `PAGES_PUBLIC_ROOT`
+   document, or a zip with `index.html` at its root. `--remote` or
+   `PAGES_REMOTE` publishes through the service; `PAGES_PUBLIC_ROOT`
    writes into that local public root. The Identity comes from the
-   Token, or from `-identity` in local mode.
+   Token, or from `--identity` in local mode.
 3. The command prints the public URL or the local page directory when
    the Page is in place.
 
 ## The Upload contract
 
-The server accepts exactly one Upload shape. The base URL is the
-publisher's remote address; the static host routes Uploads and reads from
+The server accepts exactly one Upload shape. The remote address is the
+publisher's target; the static host routes Uploads and reads from
 the same origin:
 
 ```text literal
-POST <base-url>/<slug>
+POST <remote>/<slug>
 Authorization: Bearer <identity>.<secret>
 Content-Type: text/html | application/zip
 ```
 
 A valid Upload replaces exactly `<public-root>/<identity>/<slug>`. The
-public address is `<base-url>/<identity>/<slug>/`. The Identity comes
+public address is `<remote>/<identity>/<slug>/`. The Identity comes
 from the verified Token. It never comes from the upload path or a
 header.
 

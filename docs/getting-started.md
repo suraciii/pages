@@ -22,7 +22,7 @@ mkdir -p /etc/pages /srv/pages/public
 echo '{}' > /etc/pages/tokens.json
 chmod 600 /etc/pages/tokens.json
 
-pages generate-token -tokens-file /etc/pages/tokens.json bumble
+pages generate-token --tokens-file /etc/pages/tokens.json bumble
 ```
 
 The command prints the Token once:
@@ -42,7 +42,7 @@ answers `GET /healthz`, and writes Pages into the public root. Run it in
 the foreground to try:
 
 ```text literal
-pages serve -public-root /srv/pages/public -tokens-file /etc/pages/tokens.json
+pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
 ```
 
 It logs one line with the resolved configuration. For a real host, run
@@ -62,7 +62,7 @@ On the publisher machine, the remote upload address is the only mode
 switch. Publish through the public URL:
 
 ```text literal
-pages publish -file report.html -slug report -base-url https://pages.example.com
+pages publish --file report.html --slug report --remote https://pages.example.com
 ```
 
 The command uploads the file, verifies the public URL, and prints it
@@ -75,11 +75,11 @@ https://pages.example.com/bumble/report/
 A `.zip` file publishes a directory page whose root file is
 `index.html`.
 
-Without `-base-url`, `pages publish` writes straight into a public root
+Without `--remote`, `pages publish` writes straight into a public root
 and no service runs:
 
 ```text literal
-pages publish -file report.html -slug report -identity bumble
+pages publish --file report.html --slug report --identity bumble
 /srv/pages/public/bumble/report/
 ```
 

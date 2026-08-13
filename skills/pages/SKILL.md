@@ -7,8 +7,8 @@ allowed-tools: Bash(pages:*)
 # pages
 
 Publish Pages over HTTP. A Page is one standalone `index.html` file or
-one directory of files, live at `<base-url>/<identity>/<slug>/`. The
-base URL is the publisher's remote address, fully custom.
+one directory of files, live at `<remote>/<identity>/<slug>/`. The
+remote address is the publisher's target, fully custom.
 
 Three commands:
 
@@ -22,7 +22,7 @@ you administer the service.
 
 ## Publish
 
-Two modes. The remote address is the only mode switch: `-base-url`
+Two modes. The remote address is the only mode switch: `--remote`
 selects remote mode; without it, publishing is local.
 
 ### Remote (through the service)
@@ -32,7 +32,7 @@ The upload Token is `identity.secret`. Supply it as `PAGES_UPLOAD_TOKEN`
 
 ```bash
 PAGES_UPLOAD_TOKEN=bumble.7v9A... pages publish \
-  -file report.html -slug report -base-url https://pages.example.com
+  --file report.html --slug report --remote https://pages.example.com
 ```
 
 Success prints the public URL:
@@ -46,7 +46,7 @@ https://pages.example.com/bumble/report/
 Write straight into a public root; the machine must have write access:
 
 ```bash
-pages publish -file report.html -slug report -identity bumble
+pages publish --file report.html --slug report --identity bumble
 ```
 
 Success prints the local directory:
@@ -63,7 +63,7 @@ A `.zip` file publishes a directory page. The root file must be
 `index.html`; relative links inside the page work normally:
 
 ```bash
-pages publish -file report.zip -slug report -base-url https://pages.example.com
+pages publish --file report.zip --slug report --remote https://pages.example.com
 ```
 
 ## Input resolution
@@ -74,18 +74,18 @@ identity is implied:
 
 ```json
 {
-  "base-url": "https://pages.example.com",
+  "remote": "https://pages.example.com",
   "tokens": { "bumble": "secret" },
   "identity": "bumble"
 }
 ```
 
-With this file, `pages publish -file report.html -slug report` is
+With this file, `pages publish --file report.html --slug report` is
 complete on its own.
 
 ## Rules and limits
 
-- `-file` must end in `.html` or `.zip` and must not be a directory.
+- `--file` must end in `.html` or `.zip` and must not be a directory.
 - Slug: lowercase letters, digits, and hyphens; first char is a letter
   or digit; at most 63 chars.
 - Zip: root file `index.html`, at most 512 entries, entries must not
@@ -104,11 +104,11 @@ complete on its own.
 | --- | --- | --- |
 | `usage:` message | command line or file problem | follow the message: slug shape, file extension, missing identity or public root |
 | `401` | upload Token rejected | Token is `identity.secret`; the identity must exist in the service tokens file, the secret must be exact |
-| `404` | request path wrong | publish to `POST /<slug>`; check the base URL |
+| `404` | request path wrong | publish to `POST /<slug>`; check the remote address |
 | `400` | body or zip rejected | see the server message; zip: missing `index.html`, traversal, non-UTF-8 names, too many entries |
 | `413` | body too large | raise the limit on the service, or shrink the page |
 | `503` | storage problem on the service | retry; the service keeps the previous Page when a swap fails |
-| timeout | verification did not finish in time | retry with a higher `-timeout`; the Page may still be live |
+| timeout | verification did not finish in time | retry with a higher `--timeout`; the Page may still be live |
 
 After a successful publish, verify by opening the printed URL. The
 static host may add a short delay before the new Page is readable.

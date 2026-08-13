@@ -97,7 +97,7 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 func normalizeBaseURL(rawURL string) (*url.URL, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, fmt.Errorf("base URL must be an absolute HTTP(S) URL")
+		return nil, fmt.Errorf("remote address must be an absolute HTTP(S) URL")
 	}
 	return parsed, nil
 }
