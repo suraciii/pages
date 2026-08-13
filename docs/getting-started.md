@@ -9,7 +9,7 @@ alternatives are linked at each step.
 Install the binary with the Go toolchain:
 
 ```text literal
-go install github.com/suraciii/pages/cmd/pages@latest
+go install github.com/suraciii/pages@latest
 ```
 
 The binary lands in `$(go env GOPATH)/bin/pages`. Put that directory on
@@ -18,7 +18,7 @@ the PATH of the service host.
 Developers build from the repository instead:
 
 ```text literal
-go build -o /usr/local/bin/pages ./cmd/pages
+go build -o /usr/local/bin/pages .
 ```
 
 ## 2. Issue a Token

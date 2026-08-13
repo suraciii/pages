@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . ./
 RUN go test ./... && \
-    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/pages ./cmd/pages
+    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/pages .
 
 FROM alpine:3.22
 

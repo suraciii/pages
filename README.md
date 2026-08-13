@@ -16,7 +16,7 @@ Released under the GNU AGPL-3.0. See [LICENSE](LICENSE).
 Install the binary with the Go toolchain:
 
 ```bash
-go install github.com/suraciii/pages/cmd/pages@latest
+go install github.com/suraciii/pages@latest
 ```
 
 The binary lands in `$(go env GOPATH)/bin/pages`. Developers build
@@ -107,7 +107,7 @@ Create a token file that only the service account can read. The value must be a 
 Run the server:
 
 ```bash
-go run ./cmd/pages serve \
+go run . serve \
   --public-root "$PWD/.scratch/public" \
   --tokens-file "$PWD/.scratch/tokens.json"
 ```
@@ -127,7 +127,7 @@ Use the publish subcommand after a static host (Caddy is the reference)
 serves the public directory:
 
 ```bash
-go run ./cmd/pages publish \
+go run . publish \
   --file ./example.html \
   --slug hello \
   --remote https://pages.example.com
