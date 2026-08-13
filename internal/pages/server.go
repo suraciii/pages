@@ -35,16 +35,14 @@ func NewServer(config ServerConfig) (*Server, error) {
 	if config.MaxUploadBytes <= 0 {
 		return nil, errors.New("maximum upload bytes must be positive")
 	}
-	if len(config.Tokens) == 0 {
-		return nil, errors.New("at least one token is required")
-	}
-	for identity, secret := range config.Tokens {
-		if !ValidName(identity) || secret == "" || strings.Contains(secret, ".") {
-			return nil, fmt.Errorf("invalid token entry for identity %q", identity)
-		}
+	if err := config.Tokens.validate(true); err != nil {
+		return nil, err
 	}
 	stager, err := NewStager(config.PublicRoot)
 	if err != nil {
+		return nil, err
+	}
+	if err := stager.Recover(); err != nil {
 		return nil, err
 	}
 	return &Server{

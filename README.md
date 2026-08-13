@@ -6,7 +6,7 @@ Minimal static Page publishing. One Go command has three subcommands:
   into a Public Root.
 - `pages publish` publishes one HTML file or zip file and prints its public
   URL or local Page directory.
-- `pages generate-token` issues a Token for one Identity.
+- `pages generate-token` issues a Token for the Default or one Named Identity.
 
 pages keeps no publication archive, revision history, rollback state, or
 database.
@@ -37,11 +37,11 @@ service:
 
 ```text literal
 PAGES_PUBLIC_ROOT=/tmp/pages-public pages publish \
-  --file report.html --slug report --identity bumble
+  --file report.html --slug report
 ```
 
 ```text literal
-/tmp/pages-public/bumble/report/
+/tmp/pages-public/report/
 ```
 
 ### Remote Publish
@@ -50,7 +50,7 @@ Remote Publish adds a Token, `pages serve`, and a static host. On the prepared
 service host:
 
 ```text literal
-pages generate-token bumble
+pages generate-token
 pages serve --public-root /srv/pages/public
 ```
 
@@ -72,13 +72,13 @@ pages.example.com {
 Use the Token printed by `generate-token` to Publish:
 
 ```text literal
-export PAGES_UPLOAD_TOKEN='bumble.7v9A...'
+export PAGES_UPLOAD_TOKEN='7v9A_example-secret'
 pages publish --file report.html --slug report \
   --remote https://pages.example.com
 ```
 
 ```text literal
-https://pages.example.com/bumble/report/
+https://pages.example.com/report/
 ```
 
 See [Getting Started](docs/getting-started.md) and
@@ -91,27 +91,29 @@ A remote Publish sends one Upload:
 
 ```text literal
 POST <remote>/<slug>
-Authorization: Bearer <identity>.<secret>
+Authorization: Bearer <secret> | Bearer <identity>.<secret>
 Content-Type: text/html; charset=utf-8 | application/zip
 ```
 
-The service derives the Identity from the verified Token. It never takes the
-Identity from the upload path, request body, or a custom header. A valid
-Upload replaces one Page at:
+The service derives the Default or Named Identity from the verified Token. It
+never takes Identity from the upload path, request body, or a custom header.
+The Default Identity stays hidden:
 
 ```text literal
-<public-root>/<identity>/<slug>/
+<public-root>/<slug>/
+<public-root>/@<identity>/<slug>/
 ```
 
 The Publisher verifies and prints the public URL:
 
 ```text literal
-<remote>/<identity>/<slug>/
+<remote>/<slug>/
+<remote>/@<identity>/<slug>/
 ```
 
-A local Publish writes directly into a Public Root. It takes the Identity
-from `--identity` and does not use a service or network. Both modes prepare a
-complete Page before they replace the old Page.
+A local Publish writes directly into a Public Root and does not use a service
+or network. `--identity` selects an optional Named Identity. Both modes
+prepare a complete Page before they replace the old Page.
 
 ## Documentation
 

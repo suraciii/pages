@@ -22,13 +22,20 @@ const (
 )
 
 func runServe(args []string) int {
-	flags := flag.NewFlagSet("pages serve", flag.ExitOnError)
+	flags := flag.NewFlagSet("pages serve", flag.ContinueOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages serve [flags]")
 	listenAddress := flags.String("listen", envOr("PAGES_LISTEN_ADDR", "127.0.0.1:3103"), "loopback listen address")
 	publicRoot := flags.String("public-root", os.Getenv("PAGES_PUBLIC_ROOT"), "static-resources directory (required)")
-	tokensFile := flags.String("tokens-file", resolvedTokensFile(), "identity token JSON file (default /etc/pages/tokens.json)")
+	tokensFile := flags.String("tokens-file", resolvedTokensFile(), "identity token JSON file")
 	maxUploadBytes := flags.Int64("max-upload-bytes", envInt64("PAGES_MAX_UPLOAD_BYTES", defaultUploadLimit), "maximum upload size in bytes")
-	flags.Parse(args)
+	if status, ok := parseFlags(flags, args); !ok {
+		return status
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "pages serve: positional arguments are not allowed")
+		flags.Usage()
+		return 2
+	}
 
 	if *publicRoot == "" {
 		fmt.Fprintln(os.Stderr, "pages serve: --public-root is required")

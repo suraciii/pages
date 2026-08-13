@@ -18,7 +18,7 @@ any static file server works. pages does not require any specific host.
 ## Model
 
 ```text diagram
-reader ──GET /<identity>/<slug>/──► static host ──► public root
+reader ──GET /<slug>/ or /@<identity>/<slug>/──► static host ──► public root
 publisher ──POST /<slug>──► static host ──proxy──► pages serve (loopback)
                                                              │
                                                              ▼ swaps in

@@ -12,15 +12,22 @@ import (
 )
 
 func runPublish(args []string) int {
-	flags := flag.NewFlagSet("pages publish", flag.ExitOnError)
+	flags := flag.NewFlagSet("pages publish", flag.ContinueOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages publish [flags]")
 	filePath := flags.String("file", "", "HTML or zip file to publish (required)")
 	slug := flags.String("slug", "", "page slug (required)")
 	remote := flags.String("remote", "", "remote upload address; selects remote mode")
-	identity := flags.String("identity", "", "identity; derived when empty")
+	identity := flags.String("identity", "", "named identity; default identity when empty")
 	timeout := flags.Duration("timeout", 90*time.Second, "upload and verification timeout")
 	configFlag := flags.String("config", defaultConfigPath(), "config file")
-	flags.Parse(args)
+	if status, ok := parseFlags(flags, args); !ok {
+		return status
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "pages publish: positional arguments are not allowed")
+		flags.Usage()
+		return 2
+	}
 
 	configPath := *configFlag
 	explicitConfig := false

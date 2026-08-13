@@ -6,18 +6,41 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+var secretPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+var tokenUpdateMu sync.Mutex
+
+// ErrTokenExists means IssueToken refused to replace an existing Token.
+var ErrTokenExists = errors.New("token already exists")
 
 // ValidName reports whether a path segment is safe for an identity or slug.
 func ValidName(value string) bool {
 	return namePattern.MatchString(value)
+}
+
+// ValidSecret reports whether a token secret is safe in the Token and HTTP
+// Authorization header formats.
+func ValidSecret(value string) bool {
+	return secretPattern.MatchString(value)
+}
+
+// IdentityScope returns the public path segment for a Named Identity. The
+// Default Identity has no segment.
+func IdentityScope(identity string) string {
+	if identity == "" {
+		return ""
+	}
+	return "@" + identity
 }
 
 // GenerateSecret returns a new 32-byte token secret in unpadded base64url.
@@ -30,63 +53,94 @@ func GenerateSecret() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(random), nil
 }
 
-// TokenIdentity returns the identity embedded in an identity.secret token.
+// TokenIdentity returns the Named Identity embedded in a Token. A pure-secret
+// Default Identity Token returns an empty Identity.
 func TokenIdentity(token string) (string, error) {
-	identity, secret, found := strings.Cut(token, ".")
-	if !found || secret == "" || strings.Contains(secret, ".") || !ValidName(identity) {
-		return "", fmt.Errorf("token must use identity.random-secret format")
-	}
-	return identity, nil
+	identity, _, err := parseToken(token)
+	return identity, err
 }
 
-// Tokens maps an identity to its private token secret.
-type Tokens map[string]string
+func parseToken(token string) (identity, secret string, err error) {
+	if token == "" {
+		return "", "", fmt.Errorf("token must not be empty")
+	}
+	identity, secret, named := strings.Cut(token, ".")
+	if !named {
+		if !ValidSecret(token) {
+			return "", "", fmt.Errorf("token must use secret or identity.secret format")
+		}
+		return "", token, nil
+	}
+	if !ValidName(identity) || !ValidSecret(secret) {
+		return "", "", fmt.Errorf("token must use secret or identity.secret format")
+	}
+	return identity, secret, nil
+}
 
-// LoadTokens reads a JSON object mapping safe identities to non-empty secrets.
+// Tokens stores the Default Identity Token and optional Named Identity
+// secrets.
+type Tokens struct {
+	Token      string            `json:"token,omitempty"`
+	Identities map[string]string `json:"identities,omitempty"`
+}
+
+func (tokens Tokens) validate(requireToken bool) error {
+	if tokens.Token != "" && !ValidSecret(tokens.Token) {
+		return fmt.Errorf("default token secret must use base64url characters")
+	}
+	for identity, secret := range tokens.Identities {
+		if !ValidName(identity) || !ValidSecret(secret) {
+			return fmt.Errorf("invalid token entry for identity %q", identity)
+		}
+	}
+	if requireToken && tokens.Token == "" && len(tokens.Identities) == 0 {
+		return fmt.Errorf("tokens file must contain a default or named identity token")
+	}
+	return nil
+}
+
+// LoadTokens reads a non-empty tokens file.
 func LoadTokens(path string) (Tokens, error) {
 	tokens, err := ReadTokensFile(path)
 	if err != nil {
-		return nil, err
+		return Tokens{}, err
 	}
-	if len(tokens) == 0 {
-		return nil, fmt.Errorf("tokens file must contain at least one identity")
+	if err := tokens.validate(true); err != nil {
+		return Tokens{}, err
 	}
 	return tokens, nil
 }
 
-// ReadTokensFile reads a JSON token map. A missing file yields an empty
-// map.
+// ReadTokensFile reads structured Tokens. A missing file yields empty Tokens.
 func ReadTokensFile(path string) (Tokens, error) {
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return Tokens{}, nil
 		}
-		return nil, fmt.Errorf("read tokens file: %w", err)
+		return Tokens{}, fmt.Errorf("read tokens file: %w", err)
 	}
+	defer file.Close()
 
 	var tokens Tokens
-	if err := json.Unmarshal(data, &tokens); err != nil {
-		return nil, fmt.Errorf("parse tokens file: %w", err)
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&tokens); err != nil {
+		return Tokens{}, fmt.Errorf("parse tokens file: %w", err)
 	}
-	for identity, secret := range tokens {
-		if !ValidName(identity) || secret == "" || strings.Contains(secret, ".") {
-			return nil, fmt.Errorf("invalid token entry for identity %q", identity)
-		}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return Tokens{}, fmt.Errorf("parse tokens file: trailing data")
+	}
+	if err := tokens.validate(false); err != nil {
+		return Tokens{}, err
 	}
 	return tokens, nil
 }
 
-// WriteTokensFile saves the token map atomically with mode 0600, keeping
-// every other entry of the target file.
+// WriteTokensFile saves Tokens atomically with mode 0600.
 func WriteTokensFile(path string, tokens Tokens) error {
-	if len(tokens) == 0 {
-		return fmt.Errorf("tokens file must contain at least one identity")
-	}
-	for identity, secret := range tokens {
-		if !ValidName(identity) || secret == "" || strings.Contains(secret, ".") {
-			return fmt.Errorf("invalid token entry for identity %q", identity)
-		}
+	if err := tokens.validate(true); err != nil {
+		return err
 	}
 	data, err := json.MarshalIndent(tokens, "", "  ")
 	if err != nil {
@@ -119,21 +173,93 @@ func WriteTokensFile(path string, tokens Tokens) error {
 	return nil
 }
 
-// Authenticate validates an Authorization header and returns its verified identity.
+// IssueToken serializes the complete read, check, and atomic write operation.
+func IssueToken(path, identity string, replace bool) (string, error) {
+	if identity != "" && !ValidName(identity) {
+		return "", fmt.Errorf("invalid identity %q", identity)
+	}
+
+	tokenUpdateMu.Lock()
+	defer tokenUpdateMu.Unlock()
+	unlock, err := lockTokensFile(path)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+
+	tokens, err := ReadTokensFile(path)
+	if err != nil {
+		return "", err
+	}
+	exists := tokens.Token != ""
+	if identity != "" {
+		exists = tokens.Identities[identity] != ""
+	}
+	if exists && !replace {
+		if identity == "" {
+			return "", fmt.Errorf("%w for Default Identity; use --replace to rotate", ErrTokenExists)
+		}
+		return "", fmt.Errorf("%w for identity %q; use --replace to rotate", ErrTokenExists, identity)
+	}
+
+	secret, err := GenerateSecret()
+	if err != nil {
+		return "", err
+	}
+	if identity == "" {
+		tokens.Token = secret
+	} else {
+		if tokens.Identities == nil {
+			tokens.Identities = make(map[string]string)
+		}
+		tokens.Identities[identity] = secret
+	}
+	if err := WriteTokensFile(path, tokens); err != nil {
+		return "", err
+	}
+	if identity == "" {
+		return secret, nil
+	}
+	return identity + "." + secret, nil
+}
+
+func lockTokensFile(path string) (func(), error) {
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open tokens file lock: %w", err)
+	}
+	if err := lock.Chmod(0o600); err != nil {
+		lock.Close()
+		return nil, fmt.Errorf("set tokens file lock mode: %w", err)
+	}
+	unlockFile, err := lockFile(lock)
+	if err != nil {
+		lock.Close()
+		return nil, fmt.Errorf("lock tokens file: %w", err)
+	}
+	return func() {
+		_ = unlockFile()
+		_ = lock.Close()
+	}, nil
+}
+
+// Authenticate validates an Authorization header and returns its verified
+// Default or Named Identity.
 func (tokens Tokens) Authenticate(header string) (string, bool) {
 	const prefix = "Bearer "
 	if !strings.HasPrefix(header, prefix) {
 		return "", false
 	}
 
-	token := strings.TrimPrefix(header, prefix)
-	identity, err := TokenIdentity(token)
+	identity, secret, err := parseToken(strings.TrimPrefix(header, prefix))
 	if err != nil {
 		return "", false
 	}
-	_, secret, _ := strings.Cut(token, ".")
-	expected, found := tokens[identity]
-	if !found {
+	expected := tokens.Token
+	if identity != "" {
+		expected = tokens.Identities[identity]
+	}
+	if expected == "" {
 		return "", false
 	}
 

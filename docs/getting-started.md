@@ -24,17 +24,17 @@ go build -o /usr/local/bin/pages .
 ## 2. Issue a Token
 
 On the service host, create the tokens directory and Public Root, then issue a
-Token for one Identity. The example paths require root access:
+Default Identity Token. The example paths require root access:
 
 ```text literal
 mkdir -p /etc/pages /srv/pages/public
-pages generate-token bumble
+pages generate-token
 ```
 
 The command prints the Token once:
 
 ```text literal
-bumble.7v9A...
+7v9A_example-secret
 ```
 
 Keep the printed Token for the Publisher. `generate-token` creates the tokens
@@ -71,7 +71,7 @@ URL:
 
 ```text literal
 printf '<!doctype html><title>Report</title><h1>Ready</h1>\n' > report.html
-export PAGES_UPLOAD_TOKEN='bumble.7v9A...'
+export PAGES_UPLOAD_TOKEN='7v9A_example-secret'
 pages publish --file report.html --slug report \
   --remote https://pages.example.com
 ```
@@ -80,7 +80,7 @@ The command uploads the file, verifies the public URL, and prints it
 when the Page is live:
 
 ```text literal
-https://pages.example.com/bumble/report/
+https://pages.example.com/report/
 ```
 
 A `.zip` file publishes a directory Page whose root file is
@@ -91,14 +91,15 @@ and no service runs:
 
 ```text literal
 PAGES_PUBLIC_ROOT=/srv/pages/public pages publish \
-  --file report.html --slug report --identity bumble
+  --file report.html --slug report
 ```
 
 The command prints the Page directory:
 
 ```text literal
-/srv/pages/public/bumble/report/
+/srv/pages/public/report/
 ```
 
 The local Public Root comes from `PAGES_PUBLIC_ROOT` or the config file. See
-[configuration.md](configuration.md) for the publish inputs.
+[configuration.md](configuration.md) for the Publish inputs and
+[publishing.md](publishing.md) for optional Named Identity scopes.

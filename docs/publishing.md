@@ -2,83 +2,99 @@
 
 A Publisher puts one Page in place and gets back where it lives.
 
-## Two ways to publish
+## Two Ways To Publish
 
 The remote upload address is the only mode switch: `--remote` or
-`PAGES_REMOTE` selects remote mode. Without it, publishing is local,
-into the public root from `PAGES_PUBLIC_ROOT` or the config file at
-`~/.config/pages/config.json` (or `--config`).
+`PAGES_REMOTE` selects remote mode. Without it, Publish is local and writes
+into the Public Root from `PAGES_PUBLIC_ROOT` or the config file.
 
-Remote mode publishes through the running service, and the command
-verifies the public URL:
+Remote mode uses a Token and verifies the public URL:
 
 ```text literal
-PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --remote https://pages.example.com
-https://pages.example.com/bumble/report/
+PAGES_UPLOAD_TOKEN='secret' pages publish \
+  --file report.html --slug report --remote https://pages.example.com
+https://pages.example.com/report/
 ```
 
-Local mode publishes directly into a public root on the local machine.
-The public root comes from `PAGES_PUBLIC_ROOT`. No service and no
-network are involved; the Identity is named explicitly:
+Local mode writes directly into a Public Root. It needs no Token or service:
 
 ```text literal
-PAGES_PUBLIC_ROOT=/srv/pages/public pages publish --file report.zip --slug report --identity bumble
-/srv/pages/public/bumble/report/
+PAGES_PUBLIC_ROOT=/srv/pages/public pages publish \
+  --file report.html --slug report
+/srv/pages/public/report/
 ```
 
-## What a user does
+## Default And Named Identity
 
-1. Get an upload Token from the service owner. The Token decides the
-   Identity: `bumble.secret` publishes under `bumble`. The owner issues
-   Tokens with `pages generate-token`.
-2. Publish a file with `pages publish`. The file is one standalone HTML
-   document, or a zip with `index.html` at its root. `--remote` or
-   `PAGES_REMOTE` publishes through the service; `PAGES_PUBLIC_ROOT`
-   writes into that local public root. The Identity comes from the
-   Token, or from `--identity` in local mode.
-3. The command prints the public URL or the local page directory when
-   the Page is in place.
+Identity is optional. Without a Named Identity, Publish uses the hidden
+Default Identity:
 
-## The Upload contract
+- Its Token is one secret, with no Identity prefix.
+- Its Page path is `<public-root>/<slug>/`.
+- Its public URL is `<remote>/<slug>/`.
 
-The server accepts exactly one Upload shape. The remote address selects the
-upload target; the static host routes Uploads and reads from
-the same origin:
+A Named Identity is an enhanced scope:
+
+- Its Token is `identity.secret`.
+- Its Page path is `<public-root>/@<identity>/<slug>/`.
+- Its public URL is `<remote>/@<identity>/<slug>/`.
+
+The `@` prefix keeps Named Identity scopes separate from Default Identity
+Slugs. A Default Identity zip Page can contain any internal path without
+overlapping a Named Identity.
+
+Named remote example:
+
+```text literal
+PAGES_UPLOAD_TOKEN='bumble.secret' pages publish \
+  --file report.html --slug report --remote https://pages.example.com
+https://pages.example.com/@bumble/report/
+```
+
+Named local example:
+
+```text literal
+PAGES_PUBLIC_ROOT=/srv/pages/public pages publish \
+  --file report.html --slug report --identity bumble
+/srv/pages/public/@bumble/report/
+```
+
+## Upload Contract
+
+The server accepts exactly one Upload shape. Upload does not put an Identity
+in the request path:
 
 ```text literal
 POST <remote>/<slug>
-Authorization: Bearer <identity>.<secret>
+Authorization: Bearer <secret> | Bearer <identity>.<secret>
 Content-Type: text/html | application/zip
 ```
 
-A valid Upload replaces exactly `<public-root>/<identity>/<slug>`. The
-public address is `<remote>/<identity>/<slug>/`. The Identity comes
-from the verified Token. It never comes from the upload path or a
-header.
+The server derives the Default or Named Identity from the verified Token. It
+never takes Identity from the upload path, request body, or a custom header.
+One Upload replaces exactly one Page.
 
-A zip must contain `index.html` at its root. The server rejects archives
-with symlinks, path tricks, duplicate names, hidden names, more than 512
-entries, or an uncompressed size over four times the upload limit.
+A zip must contain `index.html` at its root. The server rejects archives with
+symlinks, path tricks, duplicate names, hidden names, more than 512 entries,
+or an uncompressed size over four times the upload limit.
 
-The server rejects a body that is empty, not UTF-8, not a supported
-type, or larger than the upload limit. A rejected Upload must not change
-the existing Page.
+The server rejects a body that is empty, not UTF-8, not a supported type, or
+larger than the upload limit. A rejected Upload must not change the existing
+Page.
 
-## Reader guarantees
+## Reader Guarantees
 
-A reader sees the complete old Page or the complete new Page. When a
-directory Page is replaced, a request that lands exactly on the swap can
-see a brief absence. Both publish modes apply the same staging and swap
-rules.
+A reader sees the complete old Page or the complete new Page. When a Page is
+replaced, a request that lands exactly on the swap can see a brief absence.
+Both Publish modes apply the same staging and swap rules.
 
-Publishing is best-effort durable: after a machine crash, the newest Page
-may be missing or truncated. Publishing it again restores it.
+Publish is best-effort durable. After a machine crash, the newest Page may be
+missing or truncated. Publishing it again restores it.
 
 ## Limits
 
-- Publishing replaces a Page. There is no archive, revision, or history.
-- The upload limit defaults to 10 MiB and applies to both shapes in
-  remote mode. Local mode has no size limit; only the zip safety checks
-  run.
-- One Token publishes only inside its own Identity.
+- Publish replaces a Page. There is no archive, revision, or history.
+- The upload limit defaults to 10 MiB and applies to both shapes in remote
+  mode. Local mode has no size limit; only the zip safety checks run.
+- A Token publishes only inside its Default or Named Identity scope.
 - Pages are static display documents. They must not need scripts.

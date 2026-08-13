@@ -78,7 +78,11 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 		return "", fmt.Errorf("upload page: unexpected status %s", response.Status)
 	}
 
-	publicURL := joinURL(baseURL, identity, slug) + "/"
+	publicSegments := []string{slug}
+	if scope := pages.IdentityScope(identity); scope != "" {
+		publicSegments = append([]string{scope}, publicSegments...)
+	}
+	publicURL := joinURL(baseURL, publicSegments...) + "/"
 	verifyRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, publicURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("build verification request: %w", err)
@@ -98,6 +102,9 @@ func normalizeBaseURL(rawURL string) (*url.URL, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return nil, fmt.Errorf("remote address must be an absolute HTTP(S) URL")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("remote address must not contain a query or fragment")
 	}
 	return parsed, nil
 }

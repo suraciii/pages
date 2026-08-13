@@ -24,7 +24,8 @@ var ErrUsage = errors.New("usage")
 type Config struct {
 	Remote     string            `json:"remote"`
 	PublicRoot string            `json:"public-root"`
-	Tokens     map[string]string `json:"tokens"`
+	Token      string            `json:"token"`
+	Identities map[string]string `json:"identities"`
 	Identity   string            `json:"identity"`
 }
 
@@ -35,15 +36,24 @@ func LoadConfig(path string) (*Config, error) {
 	if path == "" {
 		return config, nil
 	}
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
-	if err := json.Unmarshal(data, config); err != nil {
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(config); err != nil {
 		return nil, fmt.Errorf("parse config file: %w", err)
 	}
-	for identity, secret := range config.Tokens {
-		if !pages.ValidName(identity) || secret == "" || strings.Contains(secret, ".") {
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("parse config file: trailing data")
+	}
+	if config.Token != "" && !pages.ValidSecret(config.Token) {
+		return nil, fmt.Errorf("default token secret must use base64url characters")
+	}
+	for identity, secret := range config.Identities {
+		if !pages.ValidName(identity) || !pages.ValidSecret(secret) {
 			return nil, fmt.Errorf("invalid token entry for identity %q", identity)
 		}
 	}
@@ -83,57 +93,57 @@ func Resolve(input Input) (*Resolved, error) {
 		return nil, err
 	}
 	if input.File == "" || input.Slug == "" {
-		return nil, fmt.Errorf("%w: -file and -slug are required", ErrUsage)
+		return nil, fmt.Errorf("%w: --file and --slug are required", ErrUsage)
 	}
 	if input.Timeout <= 0 {
-		return nil, fmt.Errorf("%w: -timeout must be positive", ErrUsage)
+		return nil, fmt.Errorf("%w: --timeout must be positive", ErrUsage)
 	}
 	if !pages.ValidName(input.Slug) {
 		return nil, fmt.Errorf("%w: invalid slug %q", ErrUsage, input.Slug)
 	}
 	extension := strings.ToLower(filepath.Ext(input.File))
 	if extension != ".html" && extension != ".zip" {
-		return nil, fmt.Errorf("%w: -file must end in .html or .zip", ErrUsage)
+		return nil, fmt.Errorf("%w: --file must end in .html or .zip", ErrUsage)
 	}
 	if info, statError := os.Stat(input.File); statError == nil && info.IsDir() {
-		return nil, fmt.Errorf("%w: -file must not be a directory; package it as a zip", ErrUsage)
+		return nil, fmt.Errorf("%w: --file must not be a directory; package it as a zip", ErrUsage)
 	}
 
 	remoteAddress := firstNonEmpty(input.Remote, os.Getenv("PAGES_REMOTE"), config.Remote)
 	remote := remoteAddress != ""
 
-	environmentToken := os.Getenv("PAGES_UPLOAD_TOKEN")
 	identity := ""
-	switch {
-	case environmentToken != "":
-		prefix, err := pages.TokenIdentity(environmentToken)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrUsage, err)
+	token := ""
+	if remote {
+		token = os.Getenv("PAGES_UPLOAD_TOKEN")
+		if token != "" {
+			prefix, err := pages.TokenIdentity(token)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrUsage, err)
+			}
+			identity = prefix
+		} else {
+			identity = firstNonEmpty(input.Identity, config.Identity)
+			if identity != "" && !pages.ValidName(identity) {
+				return nil, fmt.Errorf("%w: invalid identity %q", ErrUsage, identity)
+			}
+			if identity == "" {
+				token = config.Token
+			} else if secret := config.Identities[identity]; secret != "" {
+				token = identity + "." + secret
+			}
 		}
-		identity = prefix
-	case input.Identity != "":
-		identity = input.Identity
-	case config.Identity != "":
-		identity = config.Identity
-	case len(config.Tokens) == 1:
-		for key := range config.Tokens {
-			identity = key
+		if token == "" {
+			if identity == "" {
+				return nil, fmt.Errorf("%w: no upload token for default identity", ErrUsage)
+			}
+			return nil, fmt.Errorf("%w: no upload token for identity %q", ErrUsage, identity)
 		}
-	default:
-		return nil, fmt.Errorf("%w: no identity; set -identity or config.identity", ErrUsage)
-	}
-	if !pages.ValidName(identity) {
-		return nil, fmt.Errorf("%w: invalid identity %q", ErrUsage, identity)
-	}
-
-	token := environmentToken
-	if token == "" {
-		if secret, ok := config.Tokens[identity]; ok {
-			token = identity + "." + secret
+	} else {
+		identity = firstNonEmpty(input.Identity, config.Identity)
+		if identity != "" && !pages.ValidName(identity) {
+			return nil, fmt.Errorf("%w: invalid identity %q", ErrUsage, identity)
 		}
-	}
-	if remote && token == "" {
-		return nil, fmt.Errorf("%w: no upload token for identity %q", ErrUsage, identity)
 	}
 
 	resolved := &Resolved{
@@ -223,7 +233,12 @@ func runLocal(resolved *Resolved) (result string, resultErr error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve public root: %w", err)
 	}
-	return filepath.Join(absoluteTarget, resolved.Identity, resolved.Slug) + "/", nil
+	segments := []string{absoluteTarget}
+	if scope := pages.IdentityScope(resolved.Identity); scope != "" {
+		segments = append(segments, scope)
+	}
+	segments = append(segments, resolved.Slug)
+	return filepath.Join(segments...) + "/", nil
 }
 
 func firstNonEmpty(values ...string) string {

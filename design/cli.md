@@ -40,7 +40,7 @@ Rejected alternatives:
 ```text literal
 pages serve          [flags]
 pages publish        [flags]
-pages generate-token [flags] <identity>
+pages generate-token [flags] [identity]
 ```
 
 `pages` with no subcommand prints usage to stderr and exits 2. `--help` and
@@ -99,19 +99,20 @@ precedence defaults.
 | mode | a remote address is set → remote; otherwise local |
 | local target | `PAGES_PUBLIC_ROOT`, else `config.public-root`, else usage error when local |
 | slug | `--slug` only; the flag is required |
-| token | `PAGES_UPLOAD_TOKEN`, else `identity.secret` from the config file |
-| identity | env token prefix, else `--identity`, else `config.identity`, else the single entry of `config.tokens`, else usage error |
+| token | `PAGES_UPLOAD_TOKEN`, else the selected Token from the config file |
+| remote identity | env Token scope, else `--identity`, else `config.identity`, else Default Identity |
+| local identity | `--identity`, else `config.identity`, else Default Identity |
 
-The remote upload address is the only mode switch. Every other value is
-a plain configuration. The identity selects which token to use: the
-config file stores one token per identity.
+The remote upload address is the only mode switch. Every other value is plain
+configuration. An absent Identity selects the hidden Default Identity. A
+Named Identity selects one entry from `config.identities`.
 
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --file | none | none | yes |
 | --slug | none | none | yes |
 | --remote | PAGES_REMOTE | none | no |
-| --identity | none | none | no, derived |
+| --identity | none | Default Identity | no |
 | --timeout | none | 90s | no |
 | --config | none | ~/.config/pages/config.json | no |
 
@@ -124,7 +125,8 @@ environment values always win over the config file. JSON format:
 {
   "remote": "https://pages.example.com",
   "public-root": "/srv/pages/public",
-  "tokens": {
+  "token": "default-secret",
+  "identities": {
     "bumble": "secret-one",
     "fizz": "secret-two"
   },
@@ -137,9 +139,9 @@ environment values always win over the config file. JSON format:
   fine; a named file must exist.
 - All fields are optional. `remote` is the remote upload address;
   `public-root` is the local public root.
-- `tokens` maps each identity to its secret, like the server tokens
-  file. `identity` names the default identity. With exactly one entry
-  in `tokens`, no `identity` field is needed.
+- `token` stores the Default Identity Token. `identities` maps each Named
+  Identity to its secret. `identity` selects one Named Identity when the
+  Publisher should not use the Default Identity.
 - `--timeout` is intentionally not in the config file: it has one
   sensible default and per-invocation overrides via the flag.
 - The file should be readable only by its owner when it holds secrets.
@@ -148,20 +150,22 @@ environment values always win over the config file. JSON format:
 
 Remote mode (a remote address is set):
 
-- The Token comes from `PAGES_UPLOAD_TOKEN`, or from the config
-  file. The config file stores only the secret, like the server tokens
-  file; the command uses it as `identity.secret`. A flag for the Token
-  is rejected: secrets must not enter shell history. The Token is
-  required.
-- When `PAGES_UPLOAD_TOKEN` is set, the Identity is its prefix and
-  `--identity` is ignored. Otherwise the Identity selects the secret
-  from the config file.
+- The Token comes from `PAGES_UPLOAD_TOKEN` or the config file. A pure secret
+  selects the Default Identity. `identity.secret` selects a Named Identity.
+  A flag for the Token is rejected: secrets must not enter shell history.
+- When `PAGES_UPLOAD_TOKEN` is set, its scope decides the Identity and
+  `--identity` is ignored. Otherwise `--identity` or `config.identity` selects
+  a Named Identity; without one, `config.token` supplies the Default Identity
+  Token.
+- The public URL is `<remote>/<slug>/` for the Default Identity and
+  `<remote>/@<identity>/<slug>/` for a Named Identity.
 - The server enforces the upload byte limit.
 
 Local mode (no remote address):
 
-- No server is involved. The Identity is resolved with the table above;
-  no token is needed. `--timeout` is ignored. No network request happens.
+- No server is involved. `PAGES_UPLOAD_TOKEN` is ignored. `--identity` or
+  `config.identity` selects a Named Identity; without one, Publish uses the
+  Default Identity. `--timeout` is ignored. No network request happens.
 - The command applies the same zip validation and swap rules as `serve`.
   It has no size limit; only the safety checks run: at most 512 entries
   and an uncompressed total of at most four times the compressed size.
@@ -179,45 +183,49 @@ Common steps:
 2. `--file` ends in `.html` or `.zip`. A `.html` file uploads as
    `text/html` and a `.zip` file as `application/zip`. A directory is
    rejected with a usage error: package it as a zip first.
-3. Remote mode: `POST <url>/<slug>` with the Bearer Token and the
-   content type of the file. Expect `204`. Then
-   `GET <url>/<identity>/<slug>/`. Expect `200` with an HTML
-   content type.
-4. Local mode: stage the file under `<dir>/.pages/`, run the validation,
-   and swap it into place with the same two-rename sequence as `serve`.
-   A successful swap is the verification.
-5. Remote mode prints the public URL with a trailing slash. Local mode
-   prints the absolute page directory with a trailing slash. Both print
-   exactly one line and exit 0.
+3. Remote mode: `POST <url>/<slug>` with the Bearer Token and the content type
+   of the file. Expect `204`. Then `GET <url>/<slug>/` for the Default Identity
+   or `GET <url>/@<identity>/<slug>/` for a Named Identity. Expect `200` with
+   an HTML content type.
+4. Local mode: stage the file under `<dir>/.pages/`, run the validation, and
+   swap it into `<dir>/<slug>/` or `<dir>/@<identity>/<slug>/`. A successful
+   swap is the Verification.
+5. Remote mode prints the public URL with a trailing slash. Local mode prints
+   the absolute Page directory with a trailing slash. Both print exactly one
+   line and exit 0.
 
 Any step failure prints one error line to stderr and exits 1. Usage errors
 exit 2.
 
 ### pages generate-token
 
-Issues an upload Token for one Identity, saves it to the tokens file, and
-prints it. This is a file operation: no service is involved.
+Issues a Token, saves it to the tokens file, and prints it. With no Identity
+argument it issues a pure-secret Default Identity Token. With an Identity it
+issues an `identity.secret` Named Identity Token. This is a file operation: no
+service is involved.
 
 | Argument | Environment | Default | Required |
 | --- | --- | --- | --- |
-| identity (positional) | none | none | yes |
+| identity (positional) | none | Default Identity | no |
 | --tokens-file | PAGES_TOKENS_FILE | /etc/pages/tokens.json | no |
 | --replace | none | false | no |
 
 Steps:
 
-1. Validate the identity name with the Slug rules.
-2. Read the tokens file; a missing file counts as empty. When the
-   identity already exists and `--replace` is not set, print one error
-   line to stderr and exit 1.
+1. When present, validate the Identity name with the Slug rules.
+2. Read the tokens file; a missing file counts as empty. When the selected
+   Default or Named Identity already has a Token and `--replace` is not set,
+   print one error line to stderr and exit 1.
 3. Generate the secret: 32 random bytes, base64url without padding. The
    encoding never contains `.`.
-4. Write the tokens file atomically (temporary file in the same
-   directory, then rename) with mode `0600`, keeping every other entry.
+4. Hold an exclusive lock for the complete read, check, and write transaction.
+   Write the tokens file atomically (temporary file in the same directory,
+   then rename) with mode `0600`, keeping every other entry.
 5. Print one line with the Token:
 
 ```text literal
-bumble.7v9A...
+7v9A_example-secret
+bumble.7v9A_example-secret
 ```
 
 Exit codes: 0 on success, 1 for file failures and a refused replacement,

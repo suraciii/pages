@@ -95,7 +95,7 @@ func assertStagingEmpty(t *testing.T, publicRoot string) {
 }
 
 func TestServerPublishesZipDirectoryPage(t *testing.T) {
-	server, publicRoot := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	body := zipBody(t, fileEntry("index.html", "<h1>report</h1>"), fileEntry("img/chart.png", "png"))
 
 	response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
@@ -103,11 +103,11 @@ func TestServerPublishesZipDirectoryPage(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 
-	page, err := os.ReadFile(filepath.Join(publicRoot, "bumble", "report", "index.html"))
+	page, err := os.ReadFile(filepath.Join(publicRoot, "@bumble", "report", "index.html"))
 	if err != nil || string(page) != "<h1>report</h1>" {
 		t.Fatalf("index.html = %q, %v", page, err)
 	}
-	asset, err := os.ReadFile(filepath.Join(publicRoot, "bumble", "report", "img", "chart.png"))
+	asset, err := os.ReadFile(filepath.Join(publicRoot, "@bumble", "report", "img", "chart.png"))
 	if err != nil || string(asset) != "png" {
 		t.Fatalf("chart.png = %q, %v", asset, err)
 	}
@@ -115,20 +115,20 @@ func TestServerPublishesZipDirectoryPage(t *testing.T) {
 }
 
 func TestServerPublishesZipSkippingDirectoryEntries(t *testing.T) {
-	server, publicRoot := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	body := zipBody(t, fileEntry("index.html", "page"), dirEntry("img/"), fileEntry("img/chart.png", "png"))
 
 	response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 	}
-	if _, err := os.Stat(filepath.Join(publicRoot, "bumble", "report", "img", "chart.png")); err != nil {
+	if _, err := os.Stat(filepath.Join(publicRoot, "@bumble", "report", "img", "chart.png")); err != nil {
 		t.Fatalf("extracted asset missing: %v", err)
 	}
 }
 
 func TestServerRejectsZipWithoutRootIndexHTML(t *testing.T) {
-	server, publicRoot := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	if response := publishRequest(t, server, "report", "bumble.secret-one", []byte("original")); response.Code != http.StatusNoContent {
 		t.Fatalf("initial status = %d", response.Code)
 	}
@@ -143,7 +143,7 @@ func TestServerRejectsZipWithoutRootIndexHTML(t *testing.T) {
 }
 
 func TestServerRejectsZipWithSymlinkEntry(t *testing.T) {
-	server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	body := zipBody(t, fileEntry("index.html", "page"), symlinkEntry("link"))
 
 	response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
@@ -155,7 +155,7 @@ func TestServerRejectsZipWithSymlinkEntry(t *testing.T) {
 func TestServerRejectsZipWithBadNames(t *testing.T) {
 	for _, name := range []string{"../escape", "/absolute", "a\\b", ".hidden", "a/../b"} {
 		t.Run(name, func(t *testing.T) {
-			server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+			server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 			body := zipBody(t, fileEntry("index.html", "page"), fileEntry(name, "x"))
 
 			response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
@@ -167,7 +167,7 @@ func TestServerRejectsZipWithBadNames(t *testing.T) {
 }
 
 func TestServerRejectsZipWithNonUTF8Name(t *testing.T) {
-	server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	body := zipBody(t, fileEntry("index.html", "page"), fileEntry("bad\xffname", "x"))
 
 	response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
@@ -177,7 +177,7 @@ func TestServerRejectsZipWithNonUTF8Name(t *testing.T) {
 }
 
 func TestServerRejectsZipWithDuplicateNames(t *testing.T) {
-	server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	body := zipBody(t, fileEntry("index.html", "page"), fileEntry("index.html", "again"))
 
 	response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
@@ -187,7 +187,7 @@ func TestServerRejectsZipWithDuplicateNames(t *testing.T) {
 }
 
 func TestServerRejectsZipWithTooManyEntries(t *testing.T) {
-	server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 1<<20)
+	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 1<<20)
 	entries := []zipEntry{fileEntry("index.html", "page")}
 	for i := 0; i < maxZipEntries; i++ {
 		entries = append(entries, fileEntry("asset-"+strings.Repeat("x", i)+"-"+string(rune('a'+i%26)), "x"))
@@ -201,7 +201,7 @@ func TestServerRejectsZipWithTooManyEntries(t *testing.T) {
 }
 
 func TestServerRejectsZipWithOversizedUncompressedTotal(t *testing.T) {
-	server, _ := newTestServer(t, Tokens{"bumble": "secret-one"}, 512)
+	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 512)
 	compressed := strings.Repeat("a", 2000)
 	body := zipBody(t,
 		fileEntry("index.html", compressed),
@@ -216,7 +216,7 @@ func TestServerRejectsZipWithOversizedUncompressedTotal(t *testing.T) {
 }
 
 func TestServerReplacesDirectoryPage(t *testing.T) {
-	server, publicRoot := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	first := zipBody(t, fileEntry("index.html", "version one"), fileEntry("img/a.png", "a"))
 	second := zipBody(t, fileEntry("index.html", "version two"), fileEntry("css/style.css", "b"))
 
@@ -227,21 +227,37 @@ func TestServerReplacesDirectoryPage(t *testing.T) {
 		t.Fatalf("second status = %d", response.Code)
 	}
 
-	page, err := os.ReadFile(filepath.Join(publicRoot, "bumble", "report", "index.html"))
+	page, err := os.ReadFile(filepath.Join(publicRoot, "@bumble", "report", "index.html"))
 	if err != nil || string(page) != "version two" {
 		t.Fatalf("index.html = %q, %v", page, err)
 	}
-	if _, err := os.Stat(filepath.Join(publicRoot, "bumble", "report", "img", "a.png")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(publicRoot, "@bumble", "report", "img", "a.png")); !os.IsNotExist(err) {
 		t.Fatalf("stale asset from first version still present: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(publicRoot, "bumble", "report", "css", "style.css")); err != nil {
+	if _, err := os.Stat(filepath.Join(publicRoot, "@bumble", "report", "css", "style.css")); err != nil {
 		t.Fatalf("asset from second version missing: %v", err)
 	}
 	assertStagingEmpty(t, publicRoot)
 }
 
+func TestServerHTMLReplacesCompleteZipPage(t *testing.T) {
+	server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
+	archive := zipBody(t, fileEntry("index.html", "zip page"), fileEntry("img/stale.png", "stale"))
+	if response := publishZipRequest(t, server, "report", "bumble.secret-one", archive); response.Code != http.StatusNoContent {
+		t.Fatalf("zip status = %d", response.Code)
+	}
+	if response := publishRequest(t, server, "report", "bumble.secret-one", []byte("html page")); response.Code != http.StatusNoContent {
+		t.Fatalf("html status = %d", response.Code)
+	}
+
+	assertPageContent(t, publicRoot, "bumble", "report", "html page")
+	if _, err := os.Stat(filepath.Join(publicRoot, "@bumble", "report", "img", "stale.png")); !os.IsNotExist(err) {
+		t.Fatalf("stale zip asset still exists: %v", err)
+	}
+}
+
 func TestServerConcurrentZipPublishesSameSlug(t *testing.T) {
-	server, publicRoot := newTestServer(t, Tokens{"bumble": "secret-one"}, 4096)
+	server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
 	first := zipBody(t, fileEntry("index.html", "first"), fileEntry("a.txt", "a"))
 	second := zipBody(t, fileEntry("index.html", "second"), fileEntry("b.txt", "b"))
 
@@ -258,7 +274,7 @@ func TestServerConcurrentZipPublishesSameSlug(t *testing.T) {
 		}
 	}
 
-	page, err := os.ReadFile(filepath.Join(publicRoot, "bumble", "report", "index.html"))
+	page, err := os.ReadFile(filepath.Join(publicRoot, "@bumble", "report", "index.html"))
 	if err != nil {
 		t.Fatalf("read page: %v", err)
 	}

@@ -19,12 +19,16 @@ server, a static host, or any external service.
   backslashes, leading-dot names, non-UTF-8 names, duplicate names, too
   many entries, and an oversized uncompressed total.
 - Swap tests cover: first publish, replace of a directory page, the
-  brief-absence window is not asserted but the end state is, and startup
-  recovery restores `old-<rand>-<slug>` under the identity staging
-  directory when the target is missing and clears other staging
-  leftovers.
-- Token tests cover `SIGHUP` reload: a changed tokens file takes effect
-  after reload, and a failed reload keeps the previous tokens.
+  replacement of a zip Page with a single-file Page, the brief-absence window
+  is not asserted but the end state is, and startup recovery restores
+  `old-<rand>-<slug>` under the Default or Named Identity staging scope when
+  the target is missing and clears other staging leftovers. Recovery must
+  preserve a displaced Page when it cannot inspect the target.
+- Scope tests publish the same Slug under the Default Identity and one Named
+  Identity, then assert that `/slug/` and `/@identity/slug/` do not overlap.
+- Token tests cover pure-secret Default Identity Tokens,
+  `identity.secret` Named Identity Tokens, the structured tokens file, and
+  `SIGHUP` reload. A failed reload keeps the previous Tokens.
 - `GET /healthz` returns 200 without authentication.
 - Size limits must stay configurable through `ServerConfig` so tests do
   not wait on real time or write large files.
