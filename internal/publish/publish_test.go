@@ -13,7 +13,7 @@ import (
 )
 
 func TestResolveLocalModeDefaultsIdentityAndIgnoresUploadToken(t *testing.T) {
-	t.Setenv("PAGES_PUBLIC_ROOT", "/srv/pages/public")
+	t.Setenv("PAGES_PUBLIC_ROOT", filepath.Join(t.TempDir(), "public"))
 	t.Setenv("PAGES_UPLOAD_TOKEN", "bumble.secret")
 	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute})
 	if err != nil {
@@ -25,7 +25,7 @@ func TestResolveLocalModeDefaultsIdentityAndIgnoresUploadToken(t *testing.T) {
 }
 
 func TestResolveLocalNamedIdentity(t *testing.T) {
-	t.Setenv("PAGES_PUBLIC_ROOT", "/srv/pages/public")
+	t.Setenv("PAGES_PUBLIC_ROOT", filepath.Join(t.TempDir(), "public"))
 	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute})
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
@@ -35,10 +35,19 @@ func TestResolveLocalNamedIdentity(t *testing.T) {
 	}
 }
 
-func TestResolveLocalModeWithoutTargetIsUsageError(t *testing.T) {
-	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute})
-	if !errors.Is(err, ErrUsage) {
-		t.Fatalf("err = %v, want usage error", err)
+func TestResolveLocalModeDefaultsToCurrentDirectory(t *testing.T) {
+	t.Setenv("PAGES_PUBLIC_ROOT", "")
+	t.Setenv("PAGES_REMOTE", "")
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	currentDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get current directory: %v", err)
+	}
+	if resolved.Remote || resolved.LocalTarget != currentDirectory {
+		t.Fatalf("resolved = %+v, want local target %q", resolved, currentDirectory)
 	}
 }
 

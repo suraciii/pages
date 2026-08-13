@@ -36,12 +36,12 @@ Local Publish writes directly into a Public Root. It needs no Token or
 service:
 
 ```text literal
-PAGES_PUBLIC_ROOT=/tmp/pages-public pages publish \
+PAGES_PUBLIC_ROOT=pages-public pages publish \
   --file report.html --slug report
 ```
 
 ```text literal
-/tmp/pages-public/report/
+<current-directory>/pages-public/report/
 ```
 
 ### Remote Publish
@@ -51,7 +51,7 @@ service host:
 
 ```text literal
 pages generate-token
-pages serve --public-root /srv/pages/public
+pages serve --public-root pages-public
 ```
 
 Use this minimal Caddyfile:
@@ -64,7 +64,7 @@ pages.example.com {
     @internal path /.pages/*
     respond @internal 404
 
-    root * /srv/pages/public
+    root * {$PAGES_PUBLIC_ROOT}
     file_server
 }
 ```

@@ -129,6 +129,28 @@ func TestWriteTokensFileRejectsEmpty(t *testing.T) {
 	}
 }
 
+func TestIssueTokenCreatesPrivateParentDirectory(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "config", "pages")
+	path := filepath.Join(parent, "tokens.json")
+	if _, err := IssueToken(path, "", false); err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	info, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("stat parent: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("parent mode = %o, want 700", got)
+	}
+	info, err = os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat tokens: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("tokens mode = %o, want 600", got)
+	}
+}
+
 func TestIssueTokenConcurrentProcessesKeepEveryIdentity(t *testing.T) {
 	if identity := os.Getenv("PAGES_TEST_ISSUE_IDENTITY"); identity != "" {
 		if _, err := IssueToken(os.Getenv("PAGES_TEST_ISSUE_PATH"), identity, false); err != nil {

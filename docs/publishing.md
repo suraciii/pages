@@ -6,7 +6,8 @@ A Publisher puts one Page in place and gets back where it lives.
 
 The remote upload address is the only mode switch: `--remote` or
 `PAGES_REMOTE` selects remote mode. Without it, Publish is local and writes
-into the Public Root from `PAGES_PUBLIC_ROOT` or the config file.
+into the Public Root from `PAGES_PUBLIC_ROOT` or the config file. When neither
+is set, the current working directory is the Public Root.
 
 Remote mode uses a Token and verifies the public URL:
 
@@ -19,9 +20,17 @@ https://pages.example.com/report/
 Local mode writes directly into a Public Root. It needs no Token or service:
 
 ```text literal
-PAGES_PUBLIC_ROOT=/srv/pages/public pages publish \
+PAGES_PUBLIC_ROOT=pages-public pages publish \
   --file report.html --slug report
-/srv/pages/public/report/
+<current-directory>/pages-public/report/
+```
+
+When no local Public Root is configured, omit `PAGES_PUBLIC_ROOT` and the
+config field. The Publisher then writes to the current directory:
+
+```text literal
+pages publish --file report.html --slug report
+<current-directory>/report/
 ```
 
 ## Default And Named Identity
@@ -54,9 +63,9 @@ https://pages.example.com/@bumble/report/
 Named local example:
 
 ```text literal
-PAGES_PUBLIC_ROOT=/srv/pages/public pages publish \
+PAGES_PUBLIC_ROOT=pages-public pages publish \
   --file report.html --slug report --identity bumble
-/srv/pages/public/@bumble/report/
+<current-directory>/pages-public/@bumble/report/
 ```
 
 ## Upload Contract

@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/suraciii/pages/internal/publish"
@@ -19,6 +18,7 @@ func runPublish(args []string) int {
 	remote := flags.String("remote", "", "remote upload address; selects remote mode")
 	identity := flags.String("identity", "", "named identity; default identity when empty")
 	timeout := flags.Duration("timeout", 90*time.Second, "upload and verification timeout")
+	configDir := flags.String("config-dir", defaultConfigDir(), "configuration directory")
 	configFlag := flags.String("config", defaultConfigPath(), "config file")
 	if status, ok := parseFlags(flags, args); !ok {
 		return status
@@ -37,6 +37,7 @@ func runPublish(args []string) int {
 		}
 	})
 	if !explicitConfig {
+		configPath = configFilePath(*configDir)
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			configPath = ""
 		}
@@ -67,12 +68,4 @@ func runPublish(args []string) int {
 	}
 	fmt.Println(result)
 	return 0
-}
-
-func defaultConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".config", "pages", "config.json")
 }

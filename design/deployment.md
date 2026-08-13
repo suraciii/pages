@@ -118,10 +118,9 @@ the write port on the host loopback:
 ```text literal
 docker run \
   -v /srv/pages:/srv/pages \
+  -v /etc/pages/tokens.json:/run/secrets/pages_tokens:ro \
   -p 127.0.0.1:3103:3103 \
-  -e PAGES_PUBLIC_ROOT=/srv/pages/public \
-  -e PAGES_TOKENS_FILE=/run/secrets/pages_tokens \
-  --secret pages_tokens \
+  --user "$(id -u pages):$(id -g pages)" \
   pages:local
 ```
 
@@ -129,7 +128,11 @@ docker run \
   only. Publishing it on `0.0.0.0` puts the upload endpoint on the public
   network and must not happen.
 - The health probe is `GET /healthz` on the container port.
-- The public root is a volume; the tokens file is a secret mount.
+- `/srv/pages` is the host volume for the Public Root.
+- `/etc/pages/tokens.json` is a Linux host file mounted read-only at
+  `/run/secrets/pages_tokens`. The tokens file stays outside the Public Root.
+- The container runs with the host `pages` account's numeric UID and GID so it
+  can read the mounted Token and write the Public Root.
 
 ## systemd
 

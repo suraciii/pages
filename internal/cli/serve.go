@@ -17,7 +17,6 @@ import (
 )
 
 const (
-	defaultTokensFile  = "/etc/pages/tokens.json"
 	defaultUploadLimit = 10485760
 )
 
@@ -26,7 +25,8 @@ func runServe(args []string) int {
 	flags.Usage = subcommandUsage(flags, "Usage: pages serve [flags]")
 	listenAddress := flags.String("listen", envOr("PAGES_LISTEN_ADDR", "127.0.0.1:3103"), "loopback listen address")
 	publicRoot := flags.String("public-root", os.Getenv("PAGES_PUBLIC_ROOT"), "static-resources directory (required)")
-	tokensFile := flags.String("tokens-file", resolvedTokensFile(), "identity token JSON file")
+	configDir := flags.String("config-dir", defaultConfigDir(), "configuration directory")
+	tokensFile := flags.String("tokens-file", tokensFilePath(defaultConfigDir()), "identity token JSON file")
 	maxUploadBytes := flags.Int64("max-upload-bytes", envInt64("PAGES_MAX_UPLOAD_BYTES", defaultUploadLimit), "maximum upload size in bytes")
 	if status, ok := parseFlags(flags, args); !ok {
 		return status
@@ -35,6 +35,9 @@ func runServe(args []string) int {
 		fmt.Fprintln(os.Stderr, "pages serve: positional arguments are not allowed")
 		flags.Usage()
 		return 2
+	}
+	if !flagWasSet(flags, "tokens-file") {
+		*tokensFile = tokensFilePath(*configDir)
 	}
 
 	if *publicRoot == "" {
@@ -108,8 +111,8 @@ func envOr(name, fallback string) string {
 	return fallback
 }
 
-func resolvedTokensFile() string {
-	return envOr("PAGES_TOKENS_FILE", defaultTokensFile)
+func tokensFilePath(configDir string) string {
+	return envOr("PAGES_TOKENS_FILE", configFilePathNamed(configDir, "tokens.json"))
 }
 
 func envInt64(name string, fallback int64) int64 {

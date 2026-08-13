@@ -178,6 +178,9 @@ func IssueToken(path, identity string, replace bool) (string, error) {
 	if identity != "" && !ValidName(identity) {
 		return "", fmt.Errorf("invalid identity %q", identity)
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", fmt.Errorf("create tokens directory: %w", err)
+	}
 
 	tokenUpdateMu.Lock()
 	defer tokenUpdateMu.Unlock()

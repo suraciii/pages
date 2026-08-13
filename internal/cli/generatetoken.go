@@ -11,10 +11,14 @@ import (
 func runGenerateToken(args []string) int {
 	flags := flag.NewFlagSet("pages generate-token", flag.ContinueOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages generate-token [flags] [identity]")
-	tokensFile := flags.String("tokens-file", resolvedTokensFile(), "identity token JSON file")
+	configDir := flags.String("config-dir", defaultConfigDir(), "configuration directory")
+	tokensFile := flags.String("tokens-file", tokensFilePath(defaultConfigDir()), "identity token JSON file")
 	replace := flags.Bool("replace", false, "replace an existing identity entry")
 	if status, ok := parseFlags(flags, args); !ok {
 		return status
+	}
+	if !flagWasSet(flags, "tokens-file") {
+		*tokensFile = tokensFilePath(*configDir)
 	}
 
 	positional := flags.Args()

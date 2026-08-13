@@ -30,8 +30,18 @@ pages generate-token
 pages generate-token bumble
 ```
 
-`generate-token` and `serve` use `/etc/pages/tokens.json` by default. Set
-`PAGES_TOKENS_FILE` or `--tokens-file` to use another path.
+`generate-token` and `serve` use `tokens.json` under the configuration
+directory by default. The default configuration directory is `pages/` under
+the operating system's user config directory. On Linux this is typically
+`~/.config/pages`; on macOS it is typically under `~/Library/Application
+Support`; on Windows it is typically under `%AppData%`.
+
+Use `--config-dir` or `PAGES_CONFIG_DIR` to choose another configuration
+directory. `--config-dir` takes precedence over `PAGES_CONFIG_DIR`. Use
+`--tokens-file` or `PAGES_TOKENS_FILE` to choose an exact Token file; an exact
+file path takes precedence over the configuration directory. `generate-token`
+creates a missing parent directory with mode `0700` and the tokens file with
+mode `0600`.
 
 The Default Identity Token is a pure secret. A Named Identity Token is
 `<identity>.<secret>`. Give the printed Token to the Publisher, who stores it
@@ -44,13 +54,14 @@ reload of `serve`; no restart is needed.
 The serve flags and their environment fallbacks:
 
 ```text literal
-pages serve --public-root /srv/pages/public
+pages serve --public-root pages-public
 ```
 
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --public-root | PAGES_PUBLIC_ROOT | none | yes |
-| --tokens-file | PAGES_TOKENS_FILE | /etc/pages/tokens.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
+| --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
 | --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
 
@@ -62,13 +73,16 @@ tokens.
 ## 3. The publish config file
 
 The config file supplies defaults for every publish input. Flag and
-environment values always win over the config file. The file sits at
-`~/.config/pages/config.json`, or wherever `--config` points:
+environment values always win over the config file. The file is
+`config.json` under the configuration directory. The default directory is
+`pages/` under the operating system's user config directory. Use
+`--config-dir` or `PAGES_CONFIG_DIR` to choose another directory, or use
+`--config` to choose an exact file:
 
 ```text literal
 {
   "remote": "https://pages.example.com",
-  "public-root": "/srv/pages/public",
+  "public-root": "pages-public",
   "token": "default-secret",
   "identities": {
     "bumble": "secret-one",
@@ -80,7 +94,8 @@ environment values always win over the config file. The file sits at
 
 - `remote` is the remote upload address; `public-root` is the local
   public root. A remote address selects remote mode; without one,
-  publishing is local.
+  publishing is local. When `public-root` is empty, local Publish uses the
+  current working directory.
 - `token` stores the Default Identity Token. `identities` maps each Named
   Identity to its secret. `identity` selects one Named Identity. Without it,
   Publish uses the Default Identity.

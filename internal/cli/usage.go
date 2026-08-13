@@ -83,3 +83,13 @@ func singleDashFlag(flags *flag.FlagSet, args []string) string {
 	}
 	return ""
 }
+
+func flagWasSet(flags *flag.FlagSet, name string) bool {
+	set := false
+	flags.Visit(func(item *flag.Flag) {
+		if item.Name == name {
+			set = true
+		}
+	})
+	return set
+}

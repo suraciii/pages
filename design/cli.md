@@ -20,6 +20,8 @@ and `generate-token` issues an upload Token.
   no verbs.
 - Deployment configures one static-resources directory. The rest of the
   runtime layout is owned and maintained by `serve`.
+- User configuration defaults to the operating system's user config
+  directory, but every command may use an explicit configuration directory.
 
 Rejected alternatives:
 
@@ -57,7 +59,8 @@ down gracefully.
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --public-root | PAGES_PUBLIC_ROOT | none | yes |
-| --tokens-file | PAGES_TOKENS_FILE | /etc/pages/tokens.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
+| --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
 | --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
 
@@ -66,9 +69,11 @@ down gracefully.
 the internal `.pages/` staging area. See
 [architecture.md](architecture.md).
 
-`serve` and `generate-token` share `/etc/pages/tokens.json` as the default
-tokens file. `PAGES_TOKENS_FILE` or `--tokens-file` overrides the path for
-containers and custom deployments.
+`serve` and `generate-token` share `tokens.json` under the configuration
+directory by default. The default configuration directory is `pages/` under
+the operating system's user config directory. `--config-dir` overrides
+`PAGES_CONFIG_DIR`; `--tokens-file` and `PAGES_TOKENS_FILE` select an exact
+Token file and take precedence over the directory.
 
 `serve` responds to `GET /healthz` with `200` on the loopback listener.
 The path does not authenticate and discloses no state.
@@ -97,7 +102,7 @@ precedence defaults.
 | --- | --- |
 | remote address | `--remote`, else `PAGES_REMOTE`, else `config.remote` |
 | mode | a remote address is set → remote; otherwise local |
-| local target | `PAGES_PUBLIC_ROOT`, else `config.public-root`, else usage error when local |
+| local target | `PAGES_PUBLIC_ROOT`, else `config.public-root`, else current directory |
 | slug | `--slug` only; the flag is required |
 | token | `PAGES_UPLOAD_TOKEN`, else the selected Token from the config file |
 | remote identity | env Token scope, else `--identity`, else `config.identity`, else Default Identity |
@@ -114,7 +119,8 @@ Named Identity selects one entry from `config.identities`.
 | --remote | PAGES_REMOTE | none | no |
 | --identity | none | Default Identity | no |
 | --timeout | none | 90s | no |
-| --config | none | ~/.config/pages/config.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
+| --config | none | user config directory/pages/config.json | no |
 
 ### Config file
 
@@ -124,7 +130,7 @@ environment values always win over the config file. JSON format:
 ```text literal
 {
   "remote": "https://pages.example.com",
-  "public-root": "/srv/pages/public",
+  "public-root": "pages-public",
   "token": "default-secret",
   "identities": {
     "bumble": "secret-one",
@@ -134,9 +140,11 @@ environment values always win over the config file. JSON format:
 }
 ```
 
-- The default path is `~/.config/pages/config.json` (the user config
-  directory). `--config` names another file. A missing default file is
-  fine; a named file must exist.
+- The default path is `config.json` under the configuration directory. The
+  default directory is `pages/` under the operating system's user config
+  directory. `--config-dir` overrides `PAGES_CONFIG_DIR`; `--config` names an
+  exact file and takes precedence over the directory. A missing default file
+  is fine; a named file must exist.
 - All fields are optional. `remote` is the remote upload address;
   `public-root` is the local public root.
 - `token` stores the Default Identity Token. `identities` maps each Named
@@ -173,6 +181,9 @@ Local mode (no remote address):
   security.
 - The target directory is a pages public root: `.pages/` staging is an
   inherent part of it, and the host must not serve it.
+- When neither `PAGES_PUBLIC_ROOT` nor `config.public-root` is set, the current
+  working directory is the Public Root. The Publisher resolves it when the
+  command starts and prints the resulting absolute Page directory.
 - The CLI does not lock. Two concurrent local publishes of the same
   slug are the caller's responsibility.
 
@@ -207,15 +218,17 @@ service is involved.
 | Argument | Environment | Default | Required |
 | --- | --- | --- | --- |
 | identity (positional) | none | Default Identity | no |
-| --tokens-file | PAGES_TOKENS_FILE | /etc/pages/tokens.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
+| --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
 | --replace | none | false | no |
 
 Steps:
 
 1. When present, validate the Identity name with the Slug rules.
-2. Read the tokens file; a missing file counts as empty. When the selected
-   Default or Named Identity already has a Token and `--replace` is not set,
-   print one error line to stderr and exit 1.
+2. Create the parent directory with mode `0700` when it is missing. Read the
+   tokens file; a missing file counts as empty. When the selected Default or
+   Named Identity already has a Token and `--replace` is not set, print one
+   error line to stderr and exit 1.
 3. Generate the secret: 32 random bytes, base64url without padding. The
    encoding never contains `.`.
 4. Hold an exclusive lock for the complete read, check, and write transaction.
@@ -236,13 +249,13 @@ A newly written Token takes effect on the next tokens reload of `serve`
 
 ## Examples
 ```text literal
-pages serve --public-root /srv/pages/public
+pages serve --public-root pages-public
 
 pages generate-token bumble
 
 PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --remote https://pages.example.com
 
-pages publish --file report.zip --slug report --config ~/.config/pages/config.json
+pages publish --file report.zip --slug report --config <user-config-dir>/pages/config.json
 ```
 
 ## Status

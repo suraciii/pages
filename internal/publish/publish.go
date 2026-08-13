@@ -158,7 +158,10 @@ func Resolve(input Input) (*Resolved, error) {
 	if !remote {
 		resolved.LocalTarget = firstNonEmpty(os.Getenv("PAGES_PUBLIC_ROOT"), config.PublicRoot)
 		if resolved.LocalTarget == "" {
-			return nil, fmt.Errorf("%w: no public root; set PAGES_PUBLIC_ROOT or config.public-root", ErrUsage)
+			resolved.LocalTarget, err = os.Getwd()
+			if err != nil {
+				return nil, fmt.Errorf("resolve current directory: %w", err)
+			}
 		}
 	}
 	return resolved, nil

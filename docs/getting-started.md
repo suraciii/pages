@@ -18,16 +18,16 @@ the `PATH` of the service host.
 Developers build from the repository instead:
 
 ```text literal
-go build -o /usr/local/bin/pages .
+go build -o pages .
 ```
 
 ## 2. Issue a Token
 
-On the service host, create the tokens directory and Public Root, then issue a
-Default Identity Token. The example paths require root access:
+On the service host, create the Public Root, then issue a Default Identity
+Token:
 
 ```text literal
-mkdir -p /etc/pages /srv/pages/public
+mkdir -p pages-public
 pages generate-token
 ```
 
@@ -37,9 +37,10 @@ The command prints the Token once:
 7v9A_example-secret
 ```
 
-Keep the printed Token for the Publisher. `generate-token` creates the tokens
-file with mode `0600`. See [configuration.md](configuration.md) for the tokens
-file rules.
+Keep the printed Token for the Publisher. `generate-token` creates
+`pages/tokens.json` under the operating system's user config directory with
+mode `0600`. See
+[configuration.md](configuration.md) for the tokens file rules.
 
 ## 3. Run pages serve
 
@@ -48,7 +49,7 @@ answers `GET /healthz`, and writes Pages into the Public Root. Run it in
 the foreground to try:
 
 ```text literal
-pages serve --public-root /srv/pages/public
+pages serve --public-root pages-public
 ```
 
 It logs one line with the resolved configuration. Leave it running and use a
@@ -90,16 +91,17 @@ Without `--remote`, `pages publish` writes straight into a Public Root
 and no service runs:
 
 ```text literal
-PAGES_PUBLIC_ROOT=/srv/pages/public pages publish \
+PAGES_PUBLIC_ROOT=pages-public pages publish \
   --file report.html --slug report
 ```
 
 The command prints the Page directory:
 
 ```text literal
-/srv/pages/public/report/
+<current-directory>/pages-public/report/
 ```
 
-The local Public Root comes from `PAGES_PUBLIC_ROOT` or the config file. See
+The local Public Root comes from `PAGES_PUBLIC_ROOT` or the config file. If
+neither is set, `pages publish` uses the current working directory. See
 [configuration.md](configuration.md) for the Publish inputs and
 [publishing.md](publishing.md) for optional Named Identity scopes.

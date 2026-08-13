@@ -48,6 +48,65 @@ func TestGenerateTokenRequiresReplace(t *testing.T) {
 	}
 }
 
+func TestGenerateTokenConfigDirectory(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "pages-config")
+	output := captureStdout(t, func() int {
+		return runGenerateToken([]string{"--config-dir", configDir})
+	})
+	if output == "" {
+		t.Fatal("generate-token produced no token")
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "tokens.json")); err != nil {
+		t.Fatalf("tokens file: %v", err)
+	}
+}
+
+func TestGenerateTokenExactFileOverridesConfigDirectory(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "pages-config")
+	exactFile := filepath.Join(t.TempDir(), "mounted", "tokens.json")
+	output := captureStdout(t, func() int {
+		return runGenerateToken([]string{
+			"--config-dir", configDir,
+			"--tokens-file", exactFile,
+		})
+	})
+	if output == "" {
+		t.Fatal("generate-token produced no token")
+	}
+	if _, err := os.Stat(exactFile); err != nil {
+		t.Fatalf("exact tokens file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "tokens.json")); !os.IsNotExist(err) {
+		t.Fatalf("configuration directory tokens file error = %v", err)
+	}
+}
+
+func TestPublishConfigDirectory(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(t.TempDir(), "pages-config")
+	filePath := filepath.Join(t.TempDir(), "report.html")
+	if err := os.WriteFile(filePath, []byte("<h1>ready</h1>"), 0o600); err != nil {
+		t.Fatalf("write page: %v", err)
+	}
+	configPath := filepath.Join(configDir, "config.json")
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatalf("create config directory: %v", err)
+	}
+	config := `{"public-root":"` + root + `"}`
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	output, _, status := captureOutput(t, func() int {
+		return runPublish([]string{"--config-dir", configDir, "--file", filePath, "--slug", "report"})
+	})
+	if status != 0 {
+		t.Fatalf("status = %d, output = %q", status, output)
+	}
+	if _, err := os.Stat(filepath.Join(root, "report", "index.html")); err != nil {
+		t.Fatalf("published page: %v", err)
+	}
+}
+
 func TestSubcommandHelpUsesStdoutAndShowsDefaults(t *testing.T) {
 	stdout, stderr, status := captureOutput(t, func() int {
 		return runPublish([]string{"--help"})
