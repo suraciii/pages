@@ -40,7 +40,7 @@ Rejected alternatives:
 ```text literal
 pages serve          [flags]
 pages publish        [flags]
-pages generate-token <identity> [flags]
+pages generate-token [flags] <identity>
 ```
 
 `pages` with no subcommand prints usage to stderr and exits 2. `--help` and

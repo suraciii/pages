@@ -125,6 +125,7 @@ pages.example.com {
         Cache-Control "no-store"
     }
 
+    root * /srv/pages/public
     file_server
 }
 ```
@@ -135,6 +136,7 @@ Each part:
   are the only writes on the site.
 - `@pages_internal` blocks the service staging area. It is never public.
 - `header` applies the security headers to every response.
+- `root` points Caddy at the same Public Root as `pages serve`.
 - `file_server` serves the public root read-only.
 
 The `request_body max_size` value must match `PAGES_MAX_UPLOAD_BYTES`.

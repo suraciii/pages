@@ -83,8 +83,8 @@ header {
     Cache-Control "no-store"
 }
 
+root * /srv/pages/public
 file_server
-```
 ```
 
 ## Semantics
@@ -96,6 +96,8 @@ file_server
 - The host body limit and `pages serve --max-upload-bytes` must be the
   same value. The host enforces the limit for the public; the server
   enforces it for the loopback hop. Operators change both together.
+- The static host root and `pages serve --public-root` must name the same
+  Public Root.
 - The CSP header blocks script execution: pages are static display
   documents, never interactive applications. `style-src 'self'` allows
   stylesheets from a zip page; `img-src 'self' data:` allows bundled

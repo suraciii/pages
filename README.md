@@ -24,32 +24,66 @@ The binary is at `$(go env GOPATH)/bin/pages`. Put that directory on your
 
 ## TL;DR
 
-Publish one HTML file into a local Public Root:
+Create one Page file:
 
 ```text literal
 printf '<!doctype html><title>Report</title><h1>Ready</h1>\n' > report.html
-mkdir -p .scratch/public
-PAGES_PUBLIC_ROOT="$PWD/.scratch/public" pages publish \
-  --file report.html \
-  --slug report \
-  --identity bumble
 ```
 
-The command prints the Page directory:
+### Local Publish
+
+Local Publish writes directly into a Public Root. It needs no Token or
+service:
 
 ```text literal
-<current-directory>/.scratch/public/bumble/report/
+PAGES_PUBLIC_ROOT=/tmp/pages-public pages publish \
+  --file report.html --slug report --identity bumble
 ```
-
-Inspect the published Page:
 
 ```text literal
-cat .scratch/public/bumble/report/index.html
+/tmp/pages-public/bumble/report/
 ```
 
-This local Publish needs no Token or service. Follow the
-[Getting Started guide](docs/getting-started.md) to publish through a public
-URL.
+### Remote Publish
+
+Remote Publish adds a Token, `pages serve`, and a static host. On the prepared
+service host:
+
+```text literal
+pages generate-token bumble
+pages serve --public-root /srv/pages/public
+```
+
+Use this minimal Caddyfile:
+
+```text literal
+pages.example.com {
+    @upload method POST
+    reverse_proxy @upload 127.0.0.1:3103
+
+    @internal path /.pages/*
+    respond @internal 404
+
+    root * /srv/pages/public
+    file_server
+}
+```
+
+Use the Token printed by `generate-token` to Publish:
+
+```text literal
+export PAGES_UPLOAD_TOKEN='bumble.7v9A...'
+pages publish --file report.html --slug report \
+  --remote https://pages.example.com
+```
+
+```text literal
+https://pages.example.com/bumble/report/
+```
+
+See [Getting Started](docs/getting-started.md) and
+[Deployment](docs/deployment.md) for host setup, permissions, limits, headers,
+and process management.
 
 ## How It Works
 
