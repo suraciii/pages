@@ -11,7 +11,7 @@ import (
 func runGenerateToken(args []string) int {
 	flags := flag.NewFlagSet("pages generate-token", flag.ExitOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages generate-token [flags] <identity>")
-	tokensFile := flags.String("tokens-file", envOr("PAGES_TOKENS_FILE", ""), "identity token JSON file (required)")
+	tokensFile := flags.String("tokens-file", resolvedTokensFile(), "identity token JSON file (default /etc/pages/tokens.json)")
 	replace := flags.Bool("replace", false, "replace an existing identity entry")
 	flags.Parse(args)
 
@@ -22,11 +22,6 @@ func runGenerateToken(args []string) int {
 		return 2
 	}
 	identity := positional[0]
-	if *tokensFile == "" {
-		fmt.Fprintln(os.Stderr, "pages generate-token: --tokens-file is required")
-		flags.Usage()
-		return 2
-	}
 	if !pages.ValidName(identity) {
 		fmt.Fprintf(os.Stderr, "pages generate-token: invalid identity %q\n", identity)
 		return 2

@@ -28,7 +28,7 @@ Token for one Identity. The example paths require root access:
 
 ```text literal
 mkdir -p /etc/pages /srv/pages/public
-pages generate-token --tokens-file /etc/pages/tokens.json bumble
+pages generate-token bumble
 ```
 
 The command prints the Token once:
@@ -48,7 +48,7 @@ answers `GET /healthz`, and writes Pages into the Public Root. Run it in
 the foreground to try:
 
 ```text literal
-pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
+pages serve --public-root /srv/pages/public
 ```
 
 It logs one line with the resolved configuration. Leave it running and use a

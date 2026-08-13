@@ -22,7 +22,7 @@ go install github.com/suraciii/pages@latest
 The binary is at `$(go env GOPATH)/bin/pages`. Put that directory on your
 `PATH`.
 
-## Quick Start
+## TL;DR
 
 Publish one HTML file into a local Public Root:
 

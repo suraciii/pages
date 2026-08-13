@@ -17,17 +17,16 @@ must not contain `.`. Only the service account may read the file:
 }
 ```
 
-```text literal
-chmod 600 /etc/pages/tokens.json
-```
-
 Generate an upload Token for an Identity with `pages generate-token`. The
-command creates a missing tokens file, saves the secret, and prints the
-Token once:
+command creates a missing tokens file with mode `0600`, saves the secret, and
+prints the Token once:
 
 ```text literal
-pages generate-token --tokens-file /etc/pages/tokens.json bumble
+pages generate-token bumble
 ```
+
+`generate-token` and `serve` use `/etc/pages/tokens.json` by default. Set
+`PAGES_TOKENS_FILE` or `--tokens-file` to use another path.
 
 ```text literal
 bumble.7v9A...
@@ -45,13 +44,13 @@ needed.
 The serve flags and their environment fallbacks:
 
 ```text literal
-pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
+pages serve --public-root /srv/pages/public
 ```
 
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --public-root | PAGES_PUBLIC_ROOT | none | yes |
-| --tokens-file | PAGES_TOKENS_FILE | none | yes |
+| --tokens-file | PAGES_TOKENS_FILE | /etc/pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
 | --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
 

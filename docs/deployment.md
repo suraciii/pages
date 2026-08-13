@@ -50,7 +50,7 @@ After=network.target
 
 [Service]
 User=pages
-ExecStart=/usr/local/bin/pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
+ExecStart=/usr/local/bin/pages serve --public-root /srv/pages/public
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 

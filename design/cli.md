@@ -43,9 +43,9 @@ pages publish        [flags]
 pages generate-token <identity> [flags]
 ```
 
-`pages` with no subcommand prints usage to stderr and exits 2.
-
-No global flags. Each subcommand parses its own flag set.
+`pages` with no subcommand prints usage to stderr and exits 2. `--help` and
+`-h` print usage to stdout and exit 0. Configuration flags belong to their
+subcommands.
 
 ## Semantics
 
@@ -57,7 +57,7 @@ down gracefully.
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --public-root | PAGES_PUBLIC_ROOT | none | yes |
-| --tokens-file | PAGES_TOKENS_FILE | none | yes |
+| --tokens-file | PAGES_TOKENS_FILE | /etc/pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
 | --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
 
@@ -65,6 +65,10 @@ down gracefully.
 `serve` creates it at startup and maintains everything under it, including
 the internal `.pages/` staging area. See
 [architecture.md](architecture.md).
+
+`serve` and `generate-token` share `/etc/pages/tokens.json` as the default
+tokens file. `PAGES_TOKENS_FILE` or `--tokens-file` overrides the path for
+containers and custom deployments.
 
 `serve` responds to `GET /healthz` with `200` on the loopback listener.
 The path does not authenticate and discloses no state.
@@ -197,7 +201,7 @@ prints it. This is a file operation: no service is involved.
 | Argument | Environment | Default | Required |
 | --- | --- | --- | --- |
 | identity (positional) | none | none | yes |
-| --tokens-file | PAGES_TOKENS_FILE | none | yes |
+| --tokens-file | PAGES_TOKENS_FILE | /etc/pages/tokens.json | no |
 | --replace | none | false | no |
 
 Steps:
@@ -224,9 +228,9 @@ A newly written Token takes effect on the next tokens reload of `serve`
 
 ## Examples
 ```text literal
-pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
+pages serve --public-root /srv/pages/public
 
-pages generate-token --tokens-file /etc/pages/tokens.json bumble
+pages generate-token bumble
 
 PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --remote https://pages.example.com
 

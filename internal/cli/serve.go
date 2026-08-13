@@ -16,19 +16,22 @@ import (
 	"github.com/suraciii/pages/internal/pages"
 )
 
-const defaultUploadLimit = 10485760
+const (
+	defaultTokensFile  = "/etc/pages/tokens.json"
+	defaultUploadLimit = 10485760
+)
 
 func runServe(args []string) int {
 	flags := flag.NewFlagSet("pages serve", flag.ExitOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages serve [flags]")
 	listenAddress := flags.String("listen", envOr("PAGES_LISTEN_ADDR", "127.0.0.1:3103"), "loopback listen address")
 	publicRoot := flags.String("public-root", os.Getenv("PAGES_PUBLIC_ROOT"), "static-resources directory (required)")
-	tokensFile := flags.String("tokens-file", os.Getenv("PAGES_TOKENS_FILE"), "identity token JSON file (required)")
+	tokensFile := flags.String("tokens-file", resolvedTokensFile(), "identity token JSON file (default /etc/pages/tokens.json)")
 	maxUploadBytes := flags.Int64("max-upload-bytes", envInt64("PAGES_MAX_UPLOAD_BYTES", defaultUploadLimit), "maximum upload size in bytes")
 	flags.Parse(args)
 
-	if *publicRoot == "" || *tokensFile == "" {
-		fmt.Fprintln(os.Stderr, "pages serve: --public-root and --tokens-file are required")
+	if *publicRoot == "" {
+		fmt.Fprintln(os.Stderr, "pages serve: --public-root is required")
 		flags.Usage()
 		return 2
 	}
@@ -96,6 +99,10 @@ func envOr(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func resolvedTokensFile() string {
+	return envOr("PAGES_TOKENS_FILE", defaultTokensFile)
 }
 
 func envInt64(name string, fallback int64) int64 {
