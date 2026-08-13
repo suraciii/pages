@@ -4,143 +4,313 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
-	"os"
+	"io/fs"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/suraciii/pages/internal/destination"
+	"github.com/suraciii/pages/internal/filesystem"
+	"github.com/suraciii/pages/internal/pages"
 )
 
-func TestResolveLocalModeFromEnvironment(t *testing.T) {
-	t.Setenv("PAGES_PUBLIC_ROOT", "/srv/pages/public")
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute})
+func testRuntime(environment map[string]string) (Runtime, *filesystem.Memory) {
+	fileSystem := filesystem.NewMemory("/workspace")
+	workDir, err := fileSystem.Abs(".")
+	if err != nil {
+		panic(err)
+	}
+	return Runtime{
+		FileSystem: fileSystem,
+		Environment: func(name string) string {
+			return environment[name]
+		},
+		CurrentDirectory: func() (string, error) { return workDir, nil },
+	}, fileSystem
+}
+
+func TestResolveLocalModeDefaultsIdentityAndIgnoresUploadToken(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{
+		"PAGES_DESTINATION":  "/public",
+		"PAGES_UPLOAD_TOKEN": "bumble.secret",
+	})
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if resolved.Remote {
-		t.Fatalf("resolved = %+v, want local mode", resolved)
-	}
-	if resolved.LocalTarget != "/srv/pages/public" {
-		t.Fatalf("local target = %q", resolved.LocalTarget)
+	if resolved.Destination.IsRemote() || resolved.Destination.LocalPath() != "/public" || resolved.Identity != "" || resolved.Token != "" {
+		t.Fatalf("resolved = %+v, want local Default Identity", resolved)
 	}
 }
 
-func TestResolveLocalModeFromConfigSingleToken(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	config := `{"public-root": "/srv/pages/public", "tokens": {"bumble": "secret"}}`
-	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute, ConfigPath: configPath})
+func TestResolveLocalNamedIdentity(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "/public"})
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
 	if resolved.Identity != "bumble" {
-		t.Fatalf("identity = %q, want bumble", resolved.Identity)
-	}
-	if resolved.LocalTarget != "/srv/pages/public" {
-		t.Fatalf("local target = %q", resolved.LocalTarget)
-	}
-	if resolved.Token != "bumble.secret" {
-		t.Fatalf("token = %q, want bumble.secret", resolved.Token)
+		t.Fatalf("identity = %q", resolved.Identity)
 	}
 }
 
-func TestResolveLocalModeWithoutTargetIsUsageError(t *testing.T) {
-	_, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute})
-	if !errors.Is(err, ErrUsage) {
-		t.Fatalf("err = %v, want usage error", err)
-	}
-}
-
-func TestResolveRemoteModeRequiresToken(t *testing.T) {
-	t.Setenv("PAGES_REMOTE", "https://pages.example.com")
-	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute})
-	if !errors.Is(err, ErrUsage) {
-		t.Fatalf("err = %v, want usage error", err)
-	}
-}
-
-func TestResolveRemoteTokenFromConfigCombinesSecret(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	config := `{"remote": "https://pages.example.com", "tokens": {"bumble": "secret"}}`
-	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute, ConfigPath: configPath})
+func TestResolveLocalModeDefaultsToCurrentDirectory(t *testing.T) {
+	runtime, _ := testRuntime(nil)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if !resolved.Remote {
-		t.Fatalf("resolved = %+v, want remote mode", resolved)
+	workDir, _ := runtime.FileSystem.Abs(".")
+	if resolved.Destination.IsRemote() || resolved.Destination.LocalPath() != workDir {
+		t.Fatalf("resolved = %+v, want %s", resolved, workDir)
 	}
-	if resolved.Identity != "bumble" {
-		t.Fatalf("identity = %q, want bumble", resolved.Identity)
+}
+
+func TestResolveRemoteDefaultTokenFromEnvironment(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{
+		"PAGES_DESTINATION":  "https://pages.example.com",
+		"PAGES_UPLOAD_TOKEN": "default-secret",
+	})
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
 	}
-	if resolved.Token != "bumble.secret" {
-		t.Fatalf("token = %q, want bumble.secret", resolved.Token)
+	if resolved.Identity != "" || resolved.Token != "default-secret" {
+		t.Fatalf("resolved = %+v", resolved)
+	}
+}
+
+func TestResolveEnvironmentTokenIgnoresInvalidFlagIdentity(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{
+		"PAGES_DESTINATION":  "https://pages.example.com",
+		"PAGES_UPLOAD_TOKEN": "default-secret",
+	})
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "Bad", Timeout: time.Minute}, runtime)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if resolved.Identity != "" || resolved.Token != "default-secret" {
+		t.Fatalf("resolved = %+v", resolved)
+	}
+}
+
+func TestResolveRemoteNamedTokenFromEnvironment(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{
+		"PAGES_DESTINATION":  "https://pages.example.com",
+		"PAGES_UPLOAD_TOKEN": "bumble.secret",
+	})
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if resolved.Identity != "bumble" || resolved.Token != "bumble.secret" {
+		t.Fatalf("resolved = %+v", resolved)
+	}
+}
+
+func TestResolveRemoteTokensFromConfig(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	configPath := "/config/config.json"
+	mustWriteFile(t, fileSystem, configPath, `{"destination":"https://pages.example.com","token":"default-secret","identities":{"bumble":"secret"}}`)
+
+	for identity, wantToken := range map[string]string{"": "default-secret", "bumble": "bumble.secret"} {
+		resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: identity, Timeout: time.Minute, ConfigPath: configPath}, runtime)
+		if err != nil {
+			t.Fatalf("resolve %q: %v", identity, err)
+		}
+		if resolved.Identity != identity || resolved.Token != wantToken {
+			t.Fatalf("resolved %q = %+v", identity, resolved)
+		}
+	}
+}
+
+func TestResolveDestinationPrecedence(t *testing.T) {
+	runtime, fileSystem := testRuntime(map[string]string{"PAGES_DESTINATION": "/environment"})
+	configPath := "/config/config.json"
+	mustWriteFile(t, fileSystem, configPath, `{"destination":"/config"}`)
+
+	for name, input := range map[string]Input{
+		"flag":        {File: "page.html", Slug: "report", Destination: "/flag", Timeout: time.Minute, ConfigPath: configPath},
+		"environment": {File: "page.html", Slug: "report", Timeout: time.Minute, ConfigPath: configPath},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resolved, err := Resolve(input, runtime)
+			if err != nil {
+				t.Fatalf("resolve: %v", err)
+			}
+			want := "/environment"
+			if name == "flag" {
+				want = "/flag"
+			}
+			if resolved.Destination.LocalPath() != want {
+				t.Fatalf("destination = %q, want %q", resolved.Destination.LocalPath(), want)
+			}
+		})
+	}
+}
+
+func TestLoadConfigRejectsLegacyDestinationFields(t *testing.T) {
+	for _, field := range []string{"remote", "public-root"} {
+		t.Run(field, func(t *testing.T) {
+			runtime, fileSystem := testRuntime(nil)
+			configPath := "/config/config.json"
+			mustWriteFile(t, fileSystem, configPath, `{"`+field+`":"/old"}`)
+			if _, err := loadConfig(runtime.FileSystem, configPath); err == nil {
+				t.Fatal("load succeeded, want unknown field error")
+			}
+		})
+	}
+}
+
+func TestResolveRemoteModeRequiresSelectedToken(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com"})
+	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("err = %v, want usage error", err)
 	}
 }
 
 func TestResolveNamedConfigMustExist(t *testing.T) {
-	_, err := Resolve(Input{
-		File:       "page.html",
-		Slug:       "report",
-		Identity:   "bumble",
-		Timeout:    time.Minute,
-		ConfigPath: filepath.Join(t.TempDir(), "missing.json"),
-	})
+	runtime, _ := testRuntime(nil)
+	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute, ConfigPath: "/config/missing.json"}, runtime)
 	if err == nil || errors.Is(err, ErrUsage) {
 		t.Fatalf("err = %v, want config read error", err)
 	}
 }
 
-func TestResolveEnvironmentTokenOverridesIdentity(t *testing.T) {
-	t.Setenv("PAGES_UPLOAD_TOKEN", "bumble.secret")
-	t.Setenv("PAGES_PUBLIC_ROOT", "/srv/pages/public")
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "fizz", Timeout: time.Minute})
-	if err != nil {
-		t.Fatalf("resolve: %v", err)
-	}
-	if resolved.Identity != "bumble" {
-		t.Fatalf("identity = %q, want bumble from token", resolved.Identity)
-	}
-	if resolved.Token != "bumble.secret" {
-		t.Fatalf("token = %q", resolved.Token)
+func TestLoadConfigRejectsUnknownField(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	configPath := "/config/config.json"
+	mustWriteFile(t, fileSystem, configPath, `{"extra":"value"}`)
+	if _, err := loadConfig(runtime.FileSystem, configPath); err == nil {
+		t.Fatal("load succeeded, want unknown field error")
 	}
 }
 
-func TestRunLocalPublishesSingleHTML(t *testing.T) {
-	root := t.TempDir()
-	publicRoot := filepath.Join(root, "public")
-	pageFile := filepath.Join(root, "page.html")
-	if err := os.WriteFile(pageFile, []byte("<!doctype html><h1>local</h1>"), 0o600); err != nil {
-		t.Fatalf("write page: %v", err)
-	}
+func TestRunLocalPublishesDefaultAndNamedHTML(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	pageFile := "/source/page.html"
+	mustWriteFile(t, fileSystem, pageFile, "<!doctype html><h1>local</h1>")
 
-	output, err := Run(&Resolved{File: pageFile, Slug: "report", Identity: "bumble", LocalTarget: publicRoot})
+	for identity, relative := range map[string]string{"": "report", "bumble": filepath.Join("@bumble", "report")} {
+		output, err := Run(&Resolved{File: pageFile, Slug: "report", Identity: identity, Destination: localDestination(t, "/public")}, runtime)
+		if err != nil {
+			t.Fatalf("run %q: %v", identity, err)
+		}
+		absolutePublicRoot, err := fileSystem.Abs("/public")
+		if err != nil {
+			t.Fatalf("resolve public root: %v", err)
+		}
+		want := filepath.Join(absolutePublicRoot, relative) + string(filepath.Separator)
+		if output != want {
+			t.Fatalf("output = %q, want %q", output, want)
+		}
+		page, err := fileSystem.ReadFile(filepath.Join("/public", relative, "index.html"))
+		if err != nil || string(page) != "<!doctype html><h1>local</h1>" {
+			t.Fatalf("page = %q, %v", page, err)
+		}
+	}
+}
+
+func TestRunLocalPublishesDefaultZip(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	zipFile := "/source/page.zip"
+	writeTestZip(t, fileSystem, zipFile, map[string]string{"index.html": "<h1>zip</h1>", "img/chart.png": "png"})
+
+	output, err := Run(&Resolved{File: zipFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	want := filepath.Join(publicRoot, "bumble", "report") + "/"
-	if output != want {
-		t.Fatalf("output = %q, want %q", output, want)
+	if _, err := fileSystem.Stat("/public/report/img/chart.png"); err != nil {
+		t.Fatalf("extracted asset missing: %v", err)
 	}
-	page, err := os.ReadFile(filepath.Join(publicRoot, "bumble", "report", "index.html"))
-	if err != nil || string(page) != "<!doctype html><h1>local</h1>" {
-		t.Fatalf("page = %q, %v", page, err)
+	absolutePublicRoot, err := fileSystem.Abs("/public")
+	if err != nil {
+		t.Fatalf("resolve public root: %v", err)
+	}
+	if output != filepath.Join(absolutePublicRoot, "report")+string(filepath.Separator) {
+		t.Fatalf("output = %q", output)
 	}
 }
 
-func TestRunLocalPublishesZip(t *testing.T) {
-	root := t.TempDir()
-	publicRoot := filepath.Join(root, "public")
-	zipFile := filepath.Join(root, "page.zip")
+func TestRunLocalHTMLReplacesCompleteZipPage(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	zipFile := "/source/page.zip"
+	htmlFile := "/source/page.html"
+	writeTestZip(t, fileSystem, zipFile, map[string]string{"index.html": "zip", "img/stale.png": "stale"})
+	mustWriteFile(t, fileSystem, htmlFile, "html")
+
+	if _, err := Run(&Resolved{File: zipFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
+		t.Fatalf("publish zip: %v", err)
+	}
+	if _, err := Run(&Resolved{File: htmlFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
+		t.Fatalf("publish HTML: %v", err)
+	}
+	page, err := fileSystem.ReadFile("/public/report/index.html")
+	if err != nil || string(page) != "html" {
+		t.Fatalf("page = %q, %v", page, err)
+	}
+	if _, err := fileSystem.Stat("/public/report/img/stale.png"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("stale zip asset still exists: %v", err)
+	}
+}
+
+func TestRunLocalLeavesOtherActiveStaging(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	stager, err := pages.NewStager("/public", fileSystem)
+	if err != nil {
+		t.Fatalf("new stager: %v", err)
+	}
+	active, err := stager.StageDir("bumble")
+	if err != nil {
+		t.Fatalf("create active staging: %v", err)
+	}
+	mustWriteFile(t, fileSystem, "/source/page.html", "page")
+
+	if _, err := Run(&Resolved{File: "/source/page.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if _, err := fileSystem.Stat(active); err != nil {
+		t.Fatalf("other active staging was removed: %v", err)
+	}
+}
+
+func TestRunLocalRejectsBadZipAndLeavesNoTrace(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	writeTestZip(t, fileSystem, "/source/bad.zip", map[string]string{"report.html": "no index"})
+
+	if _, err := Run(&Resolved{File: "/source/bad.zip", Slug: "report", Destination: localDestination(t, "/public")}, runtime); err == nil {
+		t.Fatal("run succeeded, want zip validation error")
+	}
+	if _, err := fileSystem.Stat("/public/report"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("page exists after rejected publish: %v", err)
+	}
+}
+
+func localDestination(t *testing.T, path string) destination.Value {
+	t.Helper()
+	value, err := destination.Parse(path, func() (string, error) { return "/workspace", nil })
+	if err != nil {
+		t.Fatalf("parse destination: %v", err)
+	}
+	return value
+}
+
+func mustWriteFile(t *testing.T, fileSystem filesystem.FS, path, content string) {
+	t.Helper()
+	if err := fileSystem.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create parent: %v", err)
+	}
+	if err := fileSystem.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+}
+
+func writeTestZip(t *testing.T, fileSystem filesystem.FS, path string, entries map[string]string) {
+	t.Helper()
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
-	for name, content := range map[string]string{"index.html": "<h1>zip</h1>", "img/chart.png": "png"} {
+	for name, content := range entries {
 		entry, err := writer.Create(name)
 		if err != nil {
 			t.Fatalf("create entry: %v", err)
@@ -152,64 +322,10 @@ func TestRunLocalPublishesZip(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatalf("close zip: %v", err)
 	}
-	if err := os.WriteFile(zipFile, buffer.Bytes(), 0o600); err != nil {
+	if err := fileSystem.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create zip parent: %v", err)
+	}
+	if err := fileSystem.WriteFile(path, buffer.Bytes(), 0o600); err != nil {
 		t.Fatalf("write zip: %v", err)
 	}
-
-	output, err := Run(&Resolved{File: zipFile, Slug: "report", Identity: "bumble", LocalTarget: publicRoot})
-	if err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(publicRoot, "bumble", "report", "img", "chart.png")); err != nil {
-		t.Fatalf("extracted asset missing: %v", err)
-	}
-	if output != filepath.Join(publicRoot, "bumble", "report")+"/" {
-		t.Fatalf("output = %q", output)
-	}
-}
-
-func TestRunLocalRejectsBadZipAndLeavesNoTrace(t *testing.T) {
-	root := t.TempDir()
-	publicRoot := filepath.Join(root, "public")
-	zipFile := filepath.Join(root, "bad.zip")
-	var buffer bytes.Buffer
-	writer := zip.NewWriter(&buffer)
-	entry, err := writer.Create("report.html")
-	if err != nil {
-		t.Fatalf("create entry: %v", err)
-	}
-	if _, err := entry.Write([]byte("no index")); err != nil {
-		t.Fatalf("write entry: %v", err)
-	}
-	writer.Close()
-	if err := os.WriteFile(zipFile, buffer.Bytes(), 0o600); err != nil {
-		t.Fatalf("write zip: %v", err)
-	}
-
-	if _, err := Run(&Resolved{File: zipFile, Slug: "report", Identity: "bumble", LocalTarget: publicRoot}); err == nil {
-		t.Fatal("run succeeded, want zip validation error")
-	}
-	if _, err := os.Stat(filepath.Join(publicRoot, "bumble", "report")); !os.IsNotExist(err) {
-		t.Fatalf("page exists after rejected publish: %v", err)
-	}
-	staging := filepath.Join(publicRoot, ".pages", "staging")
-	if _, err := os.Stat(staging); !os.IsNotExist(err) {
-		entries, _ := os.ReadDir(staging)
-		for _, entry := range entries {
-			if entry.Name() == "bumble" {
-				inner, _ := os.ReadDir(filepath.Join(staging, "bumble"))
-				if len(inner) > 0 {
-					t.Fatalf("staging leftovers: %v", strings.Join(names(inner), ", "))
-				}
-			}
-		}
-	}
-}
-
-func names(entries []os.DirEntry) []string {
-	result := make([]string, len(entries))
-	for i, entry := range entries {
-		result[i] = entry.Name()
-	}
-	return result
 }

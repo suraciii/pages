@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/suraciii/pages/internal/filesystem"
 )
 
 // ServerConfig contains the local filesystem and authorization boundary.
@@ -17,11 +19,13 @@ type ServerConfig struct {
 	PublicRoot     string
 	Tokens         Tokens
 	MaxUploadBytes int64
+	FileSystem     filesystem.FS
 }
 
 // Server publishes standalone HTML pages into an identity namespace.
 type Server struct {
 	stager         *Stager
+	fileSystem     filesystem.FS
 	maxUploadBytes int64
 
 	tokensMu sync.RWMutex
@@ -35,20 +39,23 @@ func NewServer(config ServerConfig) (*Server, error) {
 	if config.MaxUploadBytes <= 0 {
 		return nil, errors.New("maximum upload bytes must be positive")
 	}
-	if len(config.Tokens) == 0 {
-		return nil, errors.New("at least one token is required")
+	if err := config.Tokens.validate(true); err != nil {
+		return nil, err
 	}
-	for identity, secret := range config.Tokens {
-		if !ValidName(identity) || secret == "" || strings.Contains(secret, ".") {
-			return nil, fmt.Errorf("invalid token entry for identity %q", identity)
-		}
+	fileSystem := config.FileSystem
+	if fileSystem == nil {
+		fileSystem = filesystem.OS
 	}
-	stager, err := NewStager(config.PublicRoot)
+	stager, err := NewStager(config.PublicRoot, fileSystem)
 	if err != nil {
+		return nil, err
+	}
+	if err := stager.Recover(); err != nil {
 		return nil, err
 	}
 	return &Server{
 		stager:         stager,
+		fileSystem:     fileSystem,
 		tokens:         config.Tokens,
 		maxUploadBytes: config.MaxUploadBytes,
 	}, nil
@@ -57,7 +64,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 // ReloadTokens replaces the token set after a successful load. A failed
 // load keeps the previous set.
 func (server *Server) ReloadTokens(path string) error {
-	reloaded, err := LoadTokens(path)
+	reloaded, err := LoadTokens(server.fileSystem, path)
 	if err != nil {
 		return err
 	}
@@ -123,7 +130,7 @@ func (server *Server) publish(writer http.ResponseWriter, request *http.Request,
 	}
 	defer func() {
 		if result != nil {
-			_ = os.RemoveAll(stagedDir)
+			_ = server.stager.fs.RemoveAll(stagedDir)
 		}
 	}()
 
@@ -135,7 +142,7 @@ func (server *Server) publish(writer http.ResponseWriter, request *http.Request,
 }
 
 func (server *Server) publishHTML(writer http.ResponseWriter, request *http.Request, identity, slug, stagedDir string) error {
-	indexFile, err := os.OpenFile(filepath.Join(stagedDir, "index.html"), os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
+	indexFile, err := server.stager.fs.OpenFile(filepath.Join(stagedDir, "index.html"), os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
 	if err != nil {
 		return fmt.Errorf("create staged page: %w", err)
 	}
@@ -165,10 +172,10 @@ func (server *Server) publishZip(writer http.ResponseWriter, request *http.Reque
 		return err
 	}
 	defer func() {
-		_ = os.Remove(uploadFile)
+		_ = server.stager.fs.Remove(uploadFile)
 	}()
 
-	upload, err := os.OpenFile(uploadFile, os.O_WRONLY, 0)
+	upload, err := server.stager.fs.OpenFile(uploadFile, os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("open upload body: %w", err)
 	}
@@ -185,7 +192,7 @@ func (server *Server) publishZip(writer http.ResponseWriter, request *http.Reque
 	if bytesWritten == 0 {
 		return errEmptyBody
 	}
-	if err := StageZip(uploadFile, stagedDir, server.maxUploadBytes); err != nil {
+	if err := StageZip(server.stager.fs, uploadFile, stagedDir, server.maxUploadBytes); err != nil {
 		return err
 	}
 	return server.stager.SwapZip(identity, slug, stagedDir)

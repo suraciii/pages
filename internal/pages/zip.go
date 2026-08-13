@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/suraciii/pages/internal/filesystem"
 )
 
 const maxZipEntries = 512
@@ -17,14 +19,22 @@ const maxZipEntries = 512
 // request without touching the existing page.
 var errInvalidZip = errors.New("invalid zip")
 
-// StageZip validates the archive at zipPath and extracts it into newDir.
-// The uncompressed total must not exceed four times the upload limit.
-func StageZip(zipPath, newDir string, uploadLimit int64) error {
-	archive, err := zip.OpenReader(zipPath)
+// StageZip validates and extracts an archive through fileSystem. The
+// uncompressed total must not exceed four times the upload limit.
+func StageZip(fileSystem filesystem.FS, zipPath, newDir string, uploadLimit int64) error {
+	file, err := fileSystem.Open(zipPath)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidZip, err)
 	}
-	defer archive.Close()
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidZip, err)
+	}
+	archive, err := zip.NewReader(file, info.Size())
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidZip, err)
+	}
 
 	if len(archive.File) > maxZipEntries {
 		return fmt.Errorf("%w: more than %d entries", errInvalidZip, maxZipEntries)
@@ -68,14 +78,14 @@ func StageZip(zipPath, newDir string, uploadLimit int64) error {
 			continue
 		}
 		destination := filepath.Join(newDir, filepath.FromSlash(entry.Name))
-		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		if err := fileSystem.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 			return fmt.Errorf("create zip entry directory: %w", err)
 		}
 		source, err := entry.Open()
 		if err != nil {
 			return fmt.Errorf("open zip entry: %w", err)
 		}
-		target, err := os.Create(destination)
+		target, err := fileSystem.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 		if err != nil {
 			source.Close()
 			return fmt.Errorf("create zip entry: %w", err)

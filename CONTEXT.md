@@ -7,24 +7,28 @@ one concept.
 ## Pages
 
 **Page**:
-One published resource tree under an Identity and a Slug. The root file is
-`index.html`. A Page is one standalone HTML document or a directory of
-files from a zip.
+One published resource tree under a Slug and, optionally, a Named Identity.
+The root file is `index.html`. A Page is one standalone HTML document or a
+directory of files from a zip.
 _Avoid_: file, article, site, document
 
 **Identity**:
-The namespace that owns a Page. The server derives the Identity from the
-verified Token, never from an upload path, request body, or custom header.
+The namespace that owns a Page. The Default Identity is unscoped and never
+appears in a Token, URL, or Page path. A Named Identity is an optional scope
+shown as `@<identity>`. The server derives the Identity from the verified
+Token, never from an upload path, request body, or custom header.
 _Avoid_: user, account, owner, tenant
 
 **Slug**:
-The stable name of a Page inside an Identity. A Slug has at most 63 lowercase
-letters, digits, or hyphens, and starts with a letter or digit.
+The stable name of a Page inside the Default Identity or one Named Identity.
+A Slug has at most 63 lowercase letters, digits, or hyphens, and starts with a
+letter or digit.
 _Avoid_: name, path, identifier
 
 **Token**:
-An upload credential in `identity.secret` form. The server compares the
-secret against the token file before it accepts an Upload.
+An upload credential. A Default Identity Token is one secret. A Named
+Identity Token has `identity.secret` form. The server compares the secret
+against the tokens file before it accepts an Upload.
 _Avoid_: key, password, credential
 
 ## Publishing
@@ -40,15 +44,23 @@ lives. Remote mode Uploads through the service and verifies the public
 URL. Local mode writes directly into a Public Root and returns its path.
 _Avoid_: deploy, release, push
 
+**Destination**:
+Where Publish puts a Page. A local path is a Public Root and selects local
+mode. An absolute HTTP(S) URL is an Upload and Verification endpoint and
+selects remote mode. An omitted Destination is the current directory.
+_Avoid_: remote, target, mode switch
+
 **Public Root**:
 The directory that the static host serves. The server writes Pages under
-`<identity>/<slug>/index.html` in the Public Root.
+`<slug>/index.html` for the Default Identity and
+`@<identity>/<slug>/index.html` for a Named Identity.
 _Avoid_: webroot, docroot
 
 **Staging Area**:
 The `.pages/` directory inside the Public Root. The server unpacks a new
-Page there and swaps it into place, so readers see the complete old Page
-or the complete new Page. The staging area is never served.
+Page there and swaps it into place. Readers see the complete old Page or the
+complete new Page, except for a brief absence during replacement. The staging
+area is never served.
 _Avoid_: temp dir, spool, buffer
 
 **Publisher**:

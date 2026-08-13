@@ -1,8 +1,7 @@
-# Deployment
+# Linux Deployment
 
-Run the publish service and host its pages. This guide shows complete
-working configurations. Replace the example names and paths with your
-own.
+Run the publish service and host its Pages on a Linux host or in a Linux
+container. The commands and paths in this guide are Linux-specific.
 
 ## Overview
 
@@ -19,14 +18,12 @@ configuration (tokens, flags, environment) is in
 
 ## 1. Prepare the service account and directories
 
-Create the service account, the public root, and the tokens file. Only
-the service account may read the tokens file:
+Create the service account, its Public Root, and the tokens directory:
 
 ```text literal
 useradd --system --home-dir /srv/pages --shell /usr/sbin/nologin pages
-mkdir -p /srv/pages/public
-chown -R pages:pages /srv/pages
-chown pages:pages /etc/pages/tokens.json
+install -d -o pages -g pages /srv/pages/public /etc/pages
+runuser -u pages -- pages generate-token --tokens-file /etc/pages/tokens.json
 ```
 
 ## 2. Run pages serve
@@ -50,7 +47,7 @@ After=network.target
 
 [Service]
 User=pages
-ExecStart=/usr/local/bin/pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
+ExecStart=/usr/local/bin/pages serve --destination /srv/pages/public --tokens-file /etc/pages/tokens.json
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 
@@ -83,16 +80,16 @@ private to the host.
 ```text literal
 docker run \
   -v /srv/pages:/srv/pages \
+  -v /etc/pages/tokens.json:/run/secrets/pages_tokens:ro \
   -p 127.0.0.1:3103:3103 \
-  -e PAGES_PUBLIC_ROOT=/srv/pages/public \
-  -e PAGES_TOKENS_FILE=/run/secrets/pages_tokens \
-  --secret pages_tokens \
+  --user "$(id -u pages):$(id -g pages)" \
   pages:local
 ```
 
-The write port is published on the host loopback only. The health probe
-is `GET /healthz` inside the container. The public root is a volume; the
-tokens file is a secret mount.
+The write port is published on the host loopback only. The health probe is
+`GET /healthz` inside the container. `/srv/pages` is the host volume for the
+Public Root. `/etc/pages/tokens.json` is mounted read-only as
+`/run/secrets/pages_tokens`.
 
 ## 3. Caddyfile
 
@@ -125,6 +122,7 @@ pages.example.com {
         Cache-Control "no-store"
     }
 
+    root * /srv/pages/public
     file_server
 }
 ```
@@ -135,10 +133,11 @@ Each part:
   are the only writes on the site.
 - `@pages_internal` blocks the service staging area. It is never public.
 - `header` applies the security headers to every response.
+- `root` points Caddy at the same Linux Public Root as `pages serve`.
 - `file_server` serves the public root read-only.
 
 The `request_body max_size` value must match `PAGES_MAX_UPLOAD_BYTES`.
 A path prefix is a choice, not a requirement: with
 `handle_path /docs/*` instead of `file_server`, the same site lives at
 `https://pages.example.com/docs/...`. Set the same prefix in
-`--remote`.
+`pages publish --destination`.

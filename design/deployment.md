@@ -18,15 +18,15 @@ any static file server works. pages does not require any specific host.
 ## Model
 
 ```text diagram
-reader ──GET /<identity>/<slug>/──► static host ──► public root
+reader ──GET /<slug>/ or /@<identity>/<slug>/──► static host ──► public root
 publisher ──POST /<slug>──► static host ──proxy──► pages serve (loopback)
                                                              │
                                                              ▼ swaps in
                                                         public root
 ```
 
-The deployment chooses the public root once and gives the same value to
-`pages serve --public-root` and to the static host's document root.
+The deployment chooses the public root once and gives the same path to
+`pages serve --destination` and to the static host's document root.
 
 The tokens file must sit outside the public root and outside every host
 document root.
@@ -46,10 +46,10 @@ A host that serves the public root must:
 
 The remote address is fully custom: any host and any path prefix. A deployment
 that mounts the public root under a prefix, for example `handle_path
-/docs/*`, uses that prefix in `--remote`, and uploads go to
-`POST <remote>/<slug>`.
+/docs/*`, uses that URL in `pages publish --destination`, and uploads go to
+`POST <destination>/<slug>`.
 
-`pages publish` always uploads and verifies through one remote address,
+`pages publish` always uploads and verifies through one remote Destination,
 so a full deployment needs a host with both routes.
 
 ## Caddy reference
@@ -83,8 +83,8 @@ header {
     Cache-Control "no-store"
 }
 
+root * /srv/pages/public
 file_server
-```
 ```
 
 ## Semantics
@@ -96,6 +96,8 @@ file_server
 - The host body limit and `pages serve --max-upload-bytes` must be the
   same value. The host enforces the limit for the public; the server
   enforces it for the loopback hop. Operators change both together.
+- The static host root and `pages serve --destination` must name the same
+  Public Root.
 - The CSP header blocks script execution: pages are static display
   documents, never interactive applications. `style-src 'self'` allows
   stylesheets from a zip page; `img-src 'self' data:` allows bundled
@@ -116,10 +118,9 @@ the write port on the host loopback:
 ```text literal
 docker run \
   -v /srv/pages:/srv/pages \
+  -v /etc/pages/tokens.json:/run/secrets/pages_tokens:ro \
   -p 127.0.0.1:3103:3103 \
-  -e PAGES_PUBLIC_ROOT=/srv/pages/public \
-  -e PAGES_TOKENS_FILE=/run/secrets/pages_tokens \
-  --secret pages_tokens \
+  --user "$(id -u pages):$(id -g pages)" \
   pages:local
 ```
 
@@ -127,7 +128,11 @@ docker run \
   only. Publishing it on `0.0.0.0` puts the upload endpoint on the public
   network and must not happen.
 - The health probe is `GET /healthz` on the container port.
-- The public root is a volume; the tokens file is a secret mount.
+- `/srv/pages` is the host volume for the Public Root.
+- `/etc/pages/tokens.json` is a Linux host file mounted read-only at
+  `/run/secrets/pages_tokens`. The tokens file stays outside the Public Root.
+- The container runs with the host `pages` account's numeric UID and GID so it
+  can read the mounted Token and write the Public Root.
 
 ## systemd
 

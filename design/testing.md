@@ -1,16 +1,22 @@
 # Testing
 
-The test suite uses only the standard library. It must not need a running
-server, a static host, or any external service.
+The default test suite uses only the standard library and hermetic in-memory
+resources. It must not access a physical file system, bind a network port,
+start a process, or use an external service.
 
 ## Strategy
 
-- Server tests use `httptest` and a real temporary directory from
-  `t.TempDir()`. They publish through `Server.ServeHTTP` and read the
-  resulting files from the public root.
-- Client tests use `httptest.NewServer` to fake the upload endpoint and
-  the static route. One test combines a real `pages.Server` with a real
-  static file server to cover the routing boundary.
+- File behavior uses an explicit file-system dependency. Production uses the
+  operating-system implementation. Tests create one in-memory implementation
+  per test and must not replace package globals. The in-memory implementation
+  resolves relative paths against its configured working directory, as the
+  operating-system implementation does.
+- Server tests call `Server.ServeHTTP` with `httptest.ResponseRecorder` and
+  in-memory request bodies. They inspect the in-memory Public Root.
+- Client tests use an injected `http.RoundTripper`. They must not use
+  `httptest.NewServer`, `net.Listen`, or another real socket.
+- Tests that combine the client and server route requests through a scripted
+  in-process Transport. They do not resolve DNS or cross a process boundary.
 - Every rejection test must first publish a valid Page and then assert
   that a rejected Upload leaves the existing files unchanged.
 - Zip tests build archives in memory with `archive/zip` and cover: a valid
@@ -19,17 +25,32 @@ server, a static host, or any external service.
   backslashes, leading-dot names, non-UTF-8 names, duplicate names, too
   many entries, and an oversized uncompressed total.
 - Swap tests cover: first publish, replace of a directory page, the
-  brief-absence window is not asserted but the end state is, and startup
-  recovery restores `old-<rand>-<slug>` under the identity staging
-  directory when the target is missing and clears other staging
-  leftovers.
-- Token tests cover `SIGHUP` reload: a changed tokens file takes effect
-  after reload, and a failed reload keeps the previous tokens.
+  replacement of a zip Page with a single-file Page, the brief-absence window
+  is not asserted but the end state is, and startup recovery restores
+  `old-<rand>-<slug>` under the Default or Named Identity staging scope when
+  the target is missing and clears other staging leftovers. Recovery must
+  preserve a displaced Page when it cannot inspect the target.
+- Scope tests publish the same Slug under the Default Identity and one Named
+  Identity, then assert that `/slug/` and `/@identity/slug/` do not overlap.
+- Token tests cover pure-secret Default Identity Tokens,
+  `identity.secret` Named Identity Tokens, the structured tokens file, and
+  token reload behavior. They also prove that concurrent calls in one process
+  keep every Identity. A failed reload keeps the previous Tokens. Signal
+  delivery belongs to the production process boundary and is not simulated.
 - `GET /healthz` returns 200 without authentication.
-- Size limits must stay configurable through `ServerConfig` so tests do
-  not wait on real time or write large files.
+- Size limits must stay configurable through `ServerConfig` so tests do not
+  wait on real time or allocate large resources.
+- Tests must not use `t.TempDir`, `os.CreateTemp`, physical file paths,
+  `httptest.NewServer`, fixed ports, sleeps, retries, polling, or global test
+  serialization.
+- Test dependencies must be explicit and scoped to one test. Production
+  defaults remain available without test-only global setters.
+- CLI tests inject stdout, stderr, the environment, the working directory, and
+  user config directory discovery. They cover root command dispatch and the
+  minimal local publish command without a Destination.
 
 ## Gate
 
-`make ci` runs `fmt-check`, `tidy-check`, `vet`, and `test`. Run it before
-handoff.
+`make ci` runs `fmt-check`, `tidy-check`, `vet`, and `test`. Every test command
+must run under `timeout -k 10s` with a bounded overall duration. Run the gate
+before handoff.

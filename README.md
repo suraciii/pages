@@ -1,147 +1,168 @@
 # pages
 
-Minimal static page publishing. One Go command with three subcommands:
+Minimal static Page publishing. One Go command has three subcommands:
 
-- `pages serve` accepts identity-bound uploads only on loopback.
-- `pages publish` uploads a page file and prints its public URL, or
-  writes it directly into a local public root and prints its path.
-- `pages generate-token` issues an upload Token for one identity.
+- `pages serve` accepts authenticated Uploads on loopback and writes Pages
+  into a Public Root.
+- `pages publish` publishes one HTML file or zip file and prints its public
+  URL or local Page directory.
+- `pages generate-token` issues a Token for the Default or one Named Identity.
 
-The service intentionally does not implement archives, revisions, histories, rollback, SQLite, or CI.
-
-Released under the GNU AGPL-3.0. See [LICENSE](LICENSE).
+pages keeps no publication archive, revision history, rollback state, or
+database.
 
 ## Install
 
 Install the binary with the Go toolchain:
 
-```bash
+```text literal
 go install github.com/suraciii/pages@latest
 ```
 
-The binary lands in `$(go env GOPATH)/bin/pages`. Developers build
-from the repository instead; see [Build And Test](#build-and-test).
+The binary is at `$(go env GOPATH)/bin/pages`. Put that directory on your
+`PATH`.
 
-## TLDR
+## TL;DR
 
-Issue a Token, run the service, publish a page:
+Create one Page file:
 
-```bash
-pages generate-token --tokens-file /etc/pages/tokens.json bumble
-pages serve --public-root /srv/pages/public --tokens-file /etc/pages/tokens.json
-pages publish --file report.html --slug report --remote https://pages.example.com
+```text literal
+printf '<!doctype html><title>Report</title><h1>Ready</h1>\n' > report.html
 ```
 
-`pages publish` prints the public URL when the page is live:
+### Local Publish
 
-```text
-https://pages.example.com/bumble/report/
+Local Publish writes directly into a Public Root. It needs no Token or
+service:
+
+```text literal
+pages publish --file report.html --slug report --dest pages-public
 ```
 
-`generate-token` creates the tokens file when it is missing. Without
-`--remote`, `pages publish` writes straight into a local public root
-and no server runs. Walk through the complete setup in
-[docs/getting-started.md](docs/getting-started.md).
-
-## Contract
-
-The upload client sends:
-
-```text
-POST /<slug>
-Authorization: Bearer <identity>.<random-secret>
-Content-Type: text/html; charset=utf-8 | application/zip
+```text literal
+<current-directory>/pages-public/report/
 ```
 
-A `text/html` body publishes one standalone page. An `application/zip`
-body publishes a directory page whose root file is `index.html`.
+### Remote Publish
 
-The server derives identity from the verified token, never from an upload path, request body, or custom header. A valid upload replaces exactly:
+Remote Publish adds a Token, `pages serve`, and a static host. On the prepared
+service host:
 
-```text
-<public-root>/<identity>/<slug>/
+```text literal
+pages generate-token
+pages serve --dest /srv/pages/public
 ```
 
-The public address is:
+Use this minimal Caddyfile:
 
-```text
-<remote>/<identity>/<slug>/
-```
+```text literal
+pages.example.com {
+    @upload method POST
+    reverse_proxy @upload 127.0.0.1:3103
 
-The remote address is the publisher's target, fully custom: any host
-and any path prefix the user chooses.
+    @internal path /.pages/*
+    respond @internal 404
 
-The server stages each upload under `<public-root>/.pages/` and swaps it into place with same-filesystem renames, so readers observe the complete old page or complete new page. Durability is best-effort: after a machine crash, publishing again restores the page.
-
-See [docs/publishing.md](docs/publishing.md) for the product spec,
-[docs/getting-started.md](docs/getting-started.md) to set pages up,
-and [design/architecture.md](design/architecture.md) for the design.
-
-## Skill
-
-The [pages skill](skills/pages/SKILL.md) teaches an agent how to publish
-with this product. Install it into the agent skill directory:
-
-```bash
-mkdir -p ~/.agents/skills && cp -r skills/pages ~/.agents/skills/
-```
-
-The skill is a single file. Copy it again after each update.
-
-## Build And Test
-
-```bash
-make ci
-```
-
-## Local Run
-
-Create a token file that only the service account can read. The value must be a high-entropy secret and must not contain `.`:
-
-```json
-{
-  "bumble": "replace-with-a-high-entropy-secret"
+    root * /srv/pages/public
+    file_server
 }
 ```
 
-Run the server:
+Use the Token printed by `generate-token` to Publish:
 
-```bash
-go run ./cmd/pages serve \
-  --public-root "$PWD/.scratch/public" \
-  --tokens-file "$PWD/.scratch/tokens.json"
+```text literal
+export PAGES_UPLOAD_TOKEN='7v9A_example-secret'
+pages publish --file report.html --slug report \
+  --dest https://pages.example.com
 ```
 
-Smoke-test a direct local server with `curl`. The token identity supplies the target namespace:
-
-```bash
-export PAGES_UPLOAD_TOKEN='bumble.replace-with-a-high-entropy-secret'
-curl -i -X POST http://127.0.0.1:3103/hello \
-  -H "Authorization: Bearer $PAGES_UPLOAD_TOKEN" \
-  -H 'Content-Type: text/html; charset=utf-8' \
-  --data-binary '@example.html'
-cat ./.scratch/public/bumble/hello/index.html
+```text literal
+https://pages.example.com/report/
 ```
 
-Use the publish subcommand after a static host (Caddy is the reference)
-serves the public directory:
+See [Getting Started](docs/getting-started.md) and
+[Deployment](docs/deployment.md) for host setup, permissions, limits, headers,
+and process management.
 
-```bash
-go run ./cmd/pages publish \
-  --file ./example.html \
-  --slug hello \
-  --remote https://pages.example.com
+## How It Works
+
+A remote Publish sends one Upload:
+
+```text literal
+POST <destination>/<slug>
+Authorization: Bearer <secret> | Bearer <identity>.<secret>
+Content-Type: text/html; charset=utf-8 | application/zip
 ```
 
-`pages publish` verifies the public URL after uploading before it prints
-that URL. A `.zip` file publishes a directory page. Without `--remote`,
-`pages publish` writes directly into the public root from
-`PAGES_PUBLIC_ROOT` or the config file; no service is involved.
+The service derives the Default or Named Identity from the verified Token. It
+never takes Identity from the upload path, request body, or a custom header.
+The Default Identity stays hidden:
+
+```text literal
+<public-root>/<slug>/
+<public-root>/@<identity>/<slug>/
+```
+
+The Publisher verifies and prints the public URL:
+
+```text literal
+<destination>/<slug>/
+<destination>/@<identity>/<slug>/
+```
+
+A local Publish writes directly into a Public Root and does not use a service
+or network. `--identity` selects an optional Named Identity. Both modes
+prepare a complete Page before they replace the old Page.
+
+See the [`pages publish` command contract](design/cli.md#pages-publish) for
+Destination syntax, defaults, and input precedence.
+
+## Documentation
+
+- [Getting Started](docs/getting-started.md) sets up remote Publish from
+  install to a live Page.
+- [Publishing](docs/publishing.md) defines the Publish contract and limits.
+- [Configuration](docs/configuration.md) lists flags, environment variables,
+  and config files.
+- [Deployment](docs/deployment.md) covers systemd, Docker, and the reference
+  Caddy configuration.
+- [Architecture](design/architecture.md) explains the write path and Identity
+  boundary.
+- [Design Index](design/README.md) links every design specification.
+
+## Agent Skill
+
+The [pages skill](skills/pages/SKILL.md) teaches an agent how to Publish with
+this product. From a repository checkout, install it into the agent skill
+directory:
+
+```text literal
+mkdir -p ~/.agents/skills
+cp -r skills/pages ~/.agents/skills/
+```
+
+The skill is one file. Copy it again after each update.
+
+## Development
+
+Run the repository gate and build the binary:
+
+```text literal
+make ci
+mkdir -p dist
+go build -o dist/pages .
+```
 
 ## Docker
 
-Build with the included [Dockerfile](Dockerfile):
+Build the included [Dockerfile](Dockerfile):
 
-```bash
+```text literal
 docker build -t pages:local .
 ```
+
+See [Deployment](docs/deployment.md) for a complete runtime configuration.
+
+## License
+
+pages is released under the [GNU AGPL-3.0](LICENSE).

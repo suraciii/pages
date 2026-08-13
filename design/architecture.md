@@ -5,31 +5,40 @@ loopback write path and a public read path.
 
 ## Design Drivers
 
-- Each Identity must publish Pages without trusting a shared upload
-  endpoint. Identity must come from a verified Token, never from a path or
-  header.
-- Readers must see the complete old Page or the complete new Page. A
-  partial write must never be visible during normal operation.
+- The Default Identity must stay invisible in Tokens, Page paths, and URLs.
+  Named Identity is optional. Identity must come from a verified Token, never
+  from an upload path or header.
+- Readers must never see a partial Page during normal operation. They may see
+  a brief absence while one complete Page replaces another.
 - The service must stay minimal. It has no database, no archives, and no
   revisions. A static file server already serves files; the service must
   not replace it.
 - Deployment configures one static-resources directory. pages owns and
   maintains everything under it, including its internal staging.
+- The pages program supports Linux, macOS, and Windows. Other operating
+  systems are outside the product contract and do not need to compile.
 
 ## Model
 
-**Page** — one published resource tree under
-`<public-root>/<identity>/<slug>`. The root file is `index.html`. A Page is
-either one standalone HTML document or a directory of files from a zip.
+**Page** — one published resource tree. The Default Identity target is
+`<public-root>/<slug>`. A Named Identity target is
+`<public-root>/@<identity>/<slug>`. The root file is `index.html`.
 
-**Identity** — the namespace that owns a Page. The server derives it from
-the verified Token. The upload path must not name an Identity.
+**Destination** — where `pages publish` sends a Page. A local path resolves
+to a Public Root. An absolute HTTP(S) URL resolves to the public Upload and
+Verification route. `pages serve` accepts only the local-path form and uses
+it as its Public Root.
+
+**Identity** — the namespace that owns a Page. The Default Identity is the
+empty internal value. A Named Identity is a valid name. The server derives it
+from the verified Token. The upload path must not name an Identity.
 
 **Slug** — the page name inside an Identity. A Slug matches
 `^[a-z0-9][a-z0-9-]{0,62}$`.
 
-**Token** — `identity.secret`. The server compares the secret against the
-token file with a constant-time hash comparison.
+**Token** — one secret for the Default Identity, or `identity.secret` for a
+Named Identity. The server compares the secret against the tokens file with a
+constant-time hash comparison.
 
 **Upload shape** — one of two body formats:
 
@@ -44,22 +53,26 @@ token file with a constant-time hash comparison.
 │
 ├── .pages/                                 <- internal staging, never served
 │   └── staging/
-│       ├── <identity>/
+│       ├── default/                      <- internal Default Identity scope
 │       │   ├── new-<rand>/                 <- unpacked new version
 │       │   ├── old-<rand>-<slug>/          <- displaced old version, pending delete
 │       │   └── .upload-<rand>.zip          <- pending zip body, transient
-│       └── ...
+│       └── @<identity>/                  <- internal Named Identity scope
 │
-└── <identity>/
-    ├── report/                             <- directory page from a zip
+├── report/                                 <- Default Identity Page
+│   ├── index.html
+│   └── img/chart.png
+└── @<identity>/                            <- Named Identity Pages
+    ├── report/                             <- directory Page from a zip
     │   ├── index.html
     │   └── img/chart.png
     └── hello/                              <- single-file page
         └── index.html
 ```
 
-Staging is grouped per Identity, so the Identity never needs to be
-parsed out of a directory name. `<rand>` is random hex without
+Staging uses `default` for the Default Identity and `@<identity>` for a Named
+Identity. These internal scopes cannot overlap a public Default Identity Page.
+`<rand>` is random hex without
 hyphens, so `old-<rand>-<slug>` splits unambiguously at the first
 hyphen: everything after is the Slug, even when the Slug contains
 hyphens.
@@ -84,7 +97,7 @@ pages publish (local) ----------------------------------> public root
   [deployment.md](deployment.md).
 - `pages publish` has two modes. Remote mode uses one remote address for
   Upload and Verification; the host must route `POST /...` to the
-  server, block `/pages/.pages/...`, and serve other requests from the
+  server, block `/.pages/...`, and serve other requests from the
   static files. The host requirements are in
   [deployment.md](deployment.md). Local mode writes directly into a
   public root with the same staging and swap rules; no server or host is
@@ -97,8 +110,8 @@ pages publish (local) ----------------------------------> public root
 1. Reject any method that is not `POST` with `404`.
 2. Require the path `POST /<slug>` with a valid Slug. Reject with
    `404` otherwise.
-3. Authenticate the Bearer Token and derive the Identity from it. Reject
-   with `401` on failure.
+3. Authenticate the Bearer Token and derive the Default or Named Identity
+   from it. Reject with `401` on failure.
 4. Require a supported Content-Type: `text/html` with an optional
    `charset=utf-8` parameter, or `application/zip`. Require a non-empty
    body. Reject with `400`.
@@ -127,23 +140,26 @@ root. The staging area lives inside the public root by construction, so
 every rename stays on one filesystem.
 
 ```text diagram
-1. unpack to   .pages/staging/<id>/new-<rand>/
-2. rename      public/<id>/<slug>  --> .pages/staging/<id>/old-<rand>-<slug>
-3. rename      .pages/staging/<id>/new-<rand> --> public/<id>/<slug>
-4. remove      .pages/staging/<id>/old-<rand>-<slug>
+1. unpack to   .pages/staging/<scope>/new-<rand>/
+2. rename      public/<target>/<slug> --> .pages/staging/<scope>/old-<rand>-<slug>
+3. rename      .pages/staging/<scope>/new-<rand> --> public/<target>/<slug>
+4. remove      .pages/staging/<scope>/old-<rand>-<slug>
 ```
+
+For the Default Identity, `<scope>` is `default` and `<target>` is empty. For
+a Named Identity, both values are `@<identity>`.
 
 When the target does not exist (the first publish of a Slug), step 2 is
 skipped.
 
-Concurrent Uploads for the same Slug are serialized with an in-process
-per-Slug lock, so two swaps can never interleave.
+Concurrent Uploads for the same Identity and Slug are serialized with an
+in-process lock, so two swaps can never interleave.
 
-A single-file Page replaces `index.html` with one atomic rename. No swap
-steps apply.
+A single-file Page uses the same directory swap. It replaces the complete old
+Page, including assets from an earlier zip Upload.
 
 Readers see the complete old Page or the complete new Page, or a brief
-absence during the swap of an existing directory Page.
+absence during the swap of an existing Page.
 
 Rejected alternative: a symlink swap (`<slug>` points at a version
 directory, one rename replaces the link). It removes the absence window
@@ -155,8 +171,9 @@ Windows. Enable it only when a real absence incident appears.
 
 ### Crash recovery
 
-At startup the server scans `.pages/staging/`. When
-`<id>/old-<rand>-<slug>` exists and `public/<id>/<slug>` is missing, it
+At startup the server scans `.pages/staging/`. It maps `default` back to the
+Public Root and `@<identity>` back to the matching Named Identity directory.
+When `old-<rand>-<slug>` exists and the target Page is missing, recovery
 renames the old version back. It removes every other staging leftover,
 including pending upload bodies.
 
