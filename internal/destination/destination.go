@@ -4,7 +4,6 @@ package destination
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 )
 
@@ -14,15 +13,9 @@ type Value struct {
 	remoteURL *url.URL
 }
 
-// Parse resolves an empty value to the current directory and classifies every
-// other value as a local OS path or remote HTTP(S) URL.
-func Parse(raw string) (Value, error) {
-	return ParseWithCurrentDirectory(raw, os.Getwd)
-}
-
-// ParseWithCurrentDirectory parses raw and uses currentDirectory only for an
-// empty Destination.
-func ParseWithCurrentDirectory(raw string, currentDirectory func() (string, error)) (Value, error) {
+// Parse classifies raw and uses currentDirectory only for an empty
+// Destination.
+func Parse(raw string, currentDirectory func() (string, error)) (Value, error) {
 	if raw == "" {
 		path, err := currentDirectory()
 		if err != nil {
@@ -77,15 +70,6 @@ func (value Value) IsRemote() bool {
 // Destination.
 func (value Value) LocalPath() string {
 	return value.localPath
-}
-
-// RemoteURL returns a copy of the remote URL, or nil for a local Destination.
-func (value Value) RemoteURL() *url.URL {
-	if value.remoteURL == nil {
-		return nil
-	}
-	copy := *value.remoteURL
-	return &copy
 }
 
 // String returns the Destination in its input form.

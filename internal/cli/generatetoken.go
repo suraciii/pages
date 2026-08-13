@@ -7,11 +7,7 @@ import (
 	"github.com/suraciii/pages/internal/pages"
 )
 
-func runGenerateToken(args []string) int {
-	return runGenerateTokenWithRuntime(args, productionCommandRuntime())
-}
-
-func runGenerateTokenWithRuntime(args []string, runtime commandRuntime) int {
+func runGenerateToken(args []string, runtime commandRuntime) int {
 	flags := flag.NewFlagSet("pages generate-token", flag.ContinueOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages generate-token [flags] [identity]")
 	configDir := flags.String("config-dir", runtime.environment("PAGES_CONFIG_DIR"), "configuration directory")
@@ -44,7 +40,7 @@ func runGenerateTokenWithRuntime(args []string, runtime commandRuntime) int {
 		*tokensFile = configFilePathNamed(resolvedConfigDir, "tokens.json")
 	}
 
-	token, err := pages.IssueTokenWithFS(runtime.fileSystem, *tokensFile, identity, *replace)
+	token, err := pages.IssueToken(runtime.fileSystem, *tokensFile, identity, *replace)
 	if err != nil {
 		fmt.Fprintf(runtime.stderr, "pages generate-token: %v\n", err)
 		return 1

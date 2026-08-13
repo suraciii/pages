@@ -13,7 +13,7 @@ func TestRootHelp(t *testing.T) {
 		t.Run(argument, func(t *testing.T) {
 			command := newTestCommand()
 			command.runtime.userConfigDir = func() (string, error) { return "", errors.New("must not be called") }
-			status := runWithRuntime([]string{argument}, command.runtime)
+			status := run([]string{argument}, command.runtime)
 			if status != 0 || command.stderr.Len() != 0 || !strings.Contains(command.stdout.String(), "\nUsage:\n") {
 				t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
 			}
@@ -28,7 +28,7 @@ func TestRootUsageErrors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			command := newTestCommand()
-			status := runWithRuntime(args, command.runtime)
+			status := run(args, command.runtime)
 			if status != 2 || command.stdout.Len() != 0 || !strings.Contains(command.stderr.String(), "\nUsage:\n") {
 				t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
 			}
@@ -39,7 +39,7 @@ func TestRootUsageErrors(t *testing.T) {
 func TestRootDispatchesMinimalLocalPublish(t *testing.T) {
 	command := newTestCommand()
 	command.writeFile(t, "report.html", "<h1>ready</h1>")
-	status := runWithRuntime([]string{"publish", "--file", "report.html", "--slug", "report"}, command.runtime)
+	status := run([]string{"publish", "--file", "report.html", "--slug", "report"}, command.runtime)
 	workDir, err := command.runtime.currentDirectory()
 	if err != nil {
 		t.Fatalf("resolve work directory: %v", err)

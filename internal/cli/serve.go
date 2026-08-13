@@ -21,15 +21,11 @@ const (
 	defaultUploadLimit = 10485760
 )
 
-func runServe(args []string) int {
-	return runServeWithRuntime(args, productionCommandRuntime())
-}
-
-func runServeWithRuntime(args []string, runtime commandRuntime) int {
+func runServe(args []string, runtime commandRuntime) int {
 	flags := flag.NewFlagSet("pages serve", flag.ContinueOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages serve [flags]")
 	listenAddress := flags.String("listen", envOr(runtime.environment, "PAGES_LISTEN_ADDR", "127.0.0.1:3103"), "loopback listen address")
-	destinationValue := destinationFlags(flags, runtime.environment)
+	destinationValue := destinationFlags(flags)
 	configDir := flags.String("config-dir", runtime.environment("PAGES_CONFIG_DIR"), "configuration directory")
 	tokensFile := flags.String("tokens-file", runtime.environment("PAGES_TOKENS_FILE"), "identity token JSON file")
 	maxUploadBytes := flags.Int64("max-upload-bytes", envInt64(runtime.environment, runtime.stderr, "PAGES_MAX_UPLOAD_BYTES", defaultUploadLimit), "maximum upload size in bytes")
@@ -45,7 +41,11 @@ func runServeWithRuntime(args []string, runtime commandRuntime) int {
 		fmt.Fprintf(runtime.stderr, "pages serve: %s is not supported; use PAGES_DESTINATION\n", legacy)
 		return 2
 	}
-	resolvedDestination, err := parseDestinationFlags(flags, *destinationValue, true, runtime.currentDirectory)
+	destinationInput := *destinationValue
+	if !flagWasSet(flags, "destination") && !flagWasSet(flags, "dest") {
+		destinationInput = runtime.environment("PAGES_DESTINATION")
+	}
+	resolvedDestination, err := parseDestinationFlags(flags, destinationInput, true, runtime.currentDirectory)
 	if err != nil {
 		fmt.Fprintf(runtime.stderr, "pages serve: %v\n", err)
 		flags.Usage()
@@ -65,7 +65,7 @@ func runServeWithRuntime(args []string, runtime commandRuntime) int {
 		return 2
 	}
 
-	tokens, err := pages.LoadTokensWithFS(runtime.fileSystem, *tokensFile)
+	tokens, err := pages.LoadTokens(runtime.fileSystem, *tokensFile)
 	if err != nil {
 		fmt.Fprintf(runtime.stderr, "pages serve: %v\n", err)
 		return 1

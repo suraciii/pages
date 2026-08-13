@@ -33,26 +33,12 @@ type Runtime struct {
 	}
 }
 
-func productionRuntime() Runtime {
-	return Runtime{
-		FileSystem:       filesystem.OS,
-		Environment:      os.Getenv,
-		CurrentDirectory: os.Getwd,
-	}
-}
-
 // Config is the publish config file. Every field is optional.
 type Config struct {
 	Destination string            `json:"destination"`
 	Token       string            `json:"token"`
 	Identities  map[string]string `json:"identities"`
 	Identity    string            `json:"identity"`
-}
-
-// LoadConfig reads a config file. An empty path means the default file:
-// a missing default file is fine. A named file must exist.
-func LoadConfig(path string) (*Config, error) {
-	return loadConfig(filesystem.OS, path)
 }
 
 func loadConfig(fileSystem filesystem.FS, path string) (*Config, error) {
@@ -107,15 +93,9 @@ type Resolved struct {
 	Timeout     time.Duration
 }
 
-// Resolve derives every input in the spec order. A resolved value that
-// fails validation is a usage error.
-func Resolve(input Input) (*Resolved, error) {
-	return ResolveWithRuntime(input, productionRuntime())
-}
-
-// ResolveWithRuntime resolves publish inputs through explicit process
-// resources.
-func ResolveWithRuntime(input Input, runtime Runtime) (*Resolved, error) {
+// Resolve derives every input through explicit process resources. A resolved
+// value that fails validation is a usage error.
+func Resolve(input Input, runtime Runtime) (*Resolved, error) {
 	config, err := loadConfig(runtime.FileSystem, input.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -137,7 +117,7 @@ func ResolveWithRuntime(input Input, runtime Runtime) (*Resolved, error) {
 		return nil, fmt.Errorf("%w: --file must not be a directory; package it as a zip", ErrUsage)
 	}
 
-	resolvedDestination, err := destination.ParseWithCurrentDirectory(firstNonEmpty(input.Destination, runtime.Environment("PAGES_DESTINATION"), config.Destination), runtime.CurrentDirectory)
+	resolvedDestination, err := destination.Parse(firstNonEmpty(input.Destination, runtime.Environment("PAGES_DESTINATION"), config.Destination), runtime.CurrentDirectory)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUsage, err)
 	}
@@ -188,14 +168,9 @@ func ResolveWithRuntime(input Input, runtime Runtime) (*Resolved, error) {
 	return resolved, nil
 }
 
-// Run executes the resolved publish and returns the one line to print.
-func Run(resolved *Resolved) (string, error) {
-	return RunWithRuntime(resolved, productionRuntime())
-}
-
-// RunWithRuntime executes a resolved publish through explicit process
-// resources.
-func RunWithRuntime(resolved *Resolved, runtime Runtime) (string, error) {
+// Run executes the resolved publish through explicit process resources and
+// returns the one line to print.
+func Run(resolved *Resolved, runtime Runtime) (string, error) {
 	if !resolved.Destination.IsRemote() {
 		return runLocal(resolved, runtime.FileSystem)
 	}
@@ -210,7 +185,7 @@ func RunWithRuntime(resolved *Resolved, runtime Runtime) (string, error) {
 // checks run: at most 512 entries and an uncompressed total of at most
 // four times the compressed size.
 func runLocal(resolved *Resolved, fileSystem filesystem.FS) (result string, resultErr error) {
-	stager, err := pages.NewStagerWithFS(resolved.Destination.LocalPath(), fileSystem)
+	stager, err := pages.NewStager(resolved.Destination.LocalPath(), fileSystem)
 	if err != nil {
 		return "", err
 	}
@@ -229,7 +204,7 @@ func runLocal(resolved *Resolved, fileSystem filesystem.FS) (result string, resu
 		if err != nil {
 			return "", fmt.Errorf("stat zip file: %w", err)
 		}
-		if err := pages.StageZipWithFS(fileSystem, resolved.File, stagedDir, info.Size()); err != nil {
+		if err := pages.StageZip(fileSystem, resolved.File, stagedDir, info.Size()); err != nil {
 			return "", err
 		}
 		if err := stager.SwapZip(resolved.Identity, resolved.Slug, stagedDir); err != nil {

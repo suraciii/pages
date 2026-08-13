@@ -19,15 +19,9 @@ const maxZipEntries = 512
 // request without touching the existing page.
 var errInvalidZip = errors.New("invalid zip")
 
-// StageZip validates the archive at zipPath and extracts it into newDir.
-// The uncompressed total must not exceed four times the upload limit.
-func StageZip(zipPath, newDir string, uploadLimit int64) error {
-	return StageZipWithFS(filesystem.OS, zipPath, newDir, uploadLimit)
-}
-
-// StageZipWithFS validates and extracts an archive with an explicit file
-// system.
-func StageZipWithFS(fileSystem filesystem.FS, zipPath, newDir string, uploadLimit int64) error {
+// StageZip validates and extracts an archive through fileSystem. The
+// uncompressed total must not exceed four times the upload limit.
+func StageZip(fileSystem filesystem.FS, zipPath, newDir string, uploadLimit int64) error {
 	file, err := fileSystem.Open(zipPath)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidZip, err)

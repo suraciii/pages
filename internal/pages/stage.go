@@ -25,13 +25,8 @@ type Stager struct {
 	locks  map[string]*sync.Mutex
 }
 
-// NewStager creates the public root and its staging area.
-func NewStager(publicRoot string) (*Stager, error) {
-	return NewStagerWithFS(publicRoot, filesystem.OS)
-}
-
-// NewStagerWithFS creates a Stager with an explicit file-system capability.
-func NewStagerWithFS(publicRoot string, fileSystem filesystem.FS) (*Stager, error) {
+// NewStager creates a Stager with an explicit file-system capability.
+func NewStager(publicRoot string, fileSystem filesystem.FS) (*Stager, error) {
 	if publicRoot == "" {
 		return nil, errors.New("public root is required")
 	}

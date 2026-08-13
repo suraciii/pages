@@ -37,13 +37,13 @@ publish, the Page is live.
 
 ## How the inputs work
 
-Destination is the only mode input. A local path selects local mode. An
-absolute HTTP(S) URL selects remote mode. Set it with `--destination`, its
-`--dest` alias, `PAGES_DESTINATION`, or `config.destination`. An omitted
-Destination uses the current directory. A pure-secret Token uses the Default
+Destination is the only mode input. Use a local path for local Publish and an
+absolute HTTP(S) URL for remote Publish. A pure-secret Token uses the Default
 Identity. An `identity.secret` Token uses a Named Identity. Local mode uses
 the Default Identity unless `--identity` selects a Named Identity. Run
-`pages publish --help` for every flag and default.
+`pages publish --help` for every flag and default. The
+[command contract](../../design/cli.md#pages-publish) defines the exact input
+precedence and Destination syntax.
 
 ## When you administer the service
 

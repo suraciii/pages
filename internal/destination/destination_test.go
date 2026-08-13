@@ -3,7 +3,7 @@ package destination
 import "testing"
 
 func TestParseDefaultsToCurrentDirectory(t *testing.T) {
-	value, err := ParseWithCurrentDirectory("", func() (string, error) { return "/workspace", nil })
+	value, err := Parse("", func() (string, error) { return "/workspace", nil })
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -14,7 +14,7 @@ func TestParseDefaultsToCurrentDirectory(t *testing.T) {
 
 func TestParseLocalPaths(t *testing.T) {
 	for _, path := range []string{"pages-public", "./pages-public", "/srv/pages/public", "dir/name://page", `C:\pages`, `\\server\pages`} {
-		value, err := Parse(path)
+		value, err := Parse(path, unexpectedCurrentDirectory(t))
 		if err != nil {
 			t.Fatalf("parse %q: %v", path, err)
 		}
@@ -25,7 +25,7 @@ func TestParseLocalPaths(t *testing.T) {
 }
 
 func TestParseRemoteURL(t *testing.T) {
-	value, err := Parse("https://pages.example.com/docs")
+	value, err := Parse("https://pages.example.com/docs", unexpectedCurrentDirectory(t))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -41,8 +41,16 @@ func TestParseRejectsInvalidURI(t *testing.T) {
 		"https://pages.example.com?tenant=one",
 		"https://pages.example.com/docs#publish",
 	} {
-		if _, err := Parse(raw); err == nil {
+		if _, err := Parse(raw, unexpectedCurrentDirectory(t)); err == nil {
 			t.Fatalf("Parse(%q) succeeded", raw)
 		}
+	}
+}
+
+func unexpectedCurrentDirectory(t *testing.T) func() (string, error) {
+	t.Helper()
+	return func() (string, error) {
+		t.Fatal("current directory was resolved for a non-empty Destination")
+		return "", nil
 	}
 }

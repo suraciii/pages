@@ -4,6 +4,10 @@ pages is one binary with three subcommands. The product has three
 actions: `serve` runs the publish service, `publish` puts one page live,
 and `generate-token` issues an upload Token.
 
+This specification is the source of truth for command grammar, Destination
+syntax, input precedence, defaults, output, and exit codes. User documents
+show runnable examples and link here for the exact contract.
+
 ## Design Drivers
 
 - One product surface. The implementation has two processes: an upload

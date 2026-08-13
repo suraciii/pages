@@ -15,6 +15,8 @@ loopback write path and a public read path.
   not replace it.
 - Deployment configures one static-resources directory. pages owns and
   maintains everything under it, including its internal staging.
+- The pages program supports Linux, macOS, and Windows. Other operating
+  systems are outside the product contract and do not need to compile.
 
 ## Model
 

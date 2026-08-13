@@ -46,7 +46,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 	if fileSystem == nil {
 		fileSystem = filesystem.OS
 	}
-	stager, err := NewStagerWithFS(config.PublicRoot, fileSystem)
+	stager, err := NewStager(config.PublicRoot, fileSystem)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 // ReloadTokens replaces the token set after a successful load. A failed
 // load keeps the previous set.
 func (server *Server) ReloadTokens(path string) error {
-	reloaded, err := LoadTokensWithFS(server.fileSystem, path)
+	reloaded, err := LoadTokens(server.fileSystem, path)
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func (server *Server) publishZip(writer http.ResponseWriter, request *http.Reque
 	if bytesWritten == 0 {
 		return errEmptyBody
 	}
-	if err := StageZipWithFS(server.stager.fs, uploadFile, stagedDir, server.maxUploadBytes); err != nil {
+	if err := StageZip(server.stager.fs, uploadFile, stagedDir, server.maxUploadBytes); err != nil {
 		return err
 	}
 	return server.stager.SwapZip(identity, slug, stagedDir)

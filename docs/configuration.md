@@ -114,6 +114,5 @@ required.
 pure secret selects the Default Identity. `identity.secret` selects a Named
 Identity. Local mode does not read this environment variable.
 
-The Publisher resolves Destination in this order: `--destination` or
-`--dest`, `PAGES_DESTINATION`, `config.destination`, then the current
-directory. Do not set both flag names in one command.
+See the [`pages publish` command contract](../design/cli.md#pages-publish) for
+the exact Destination precedence and alias rules.

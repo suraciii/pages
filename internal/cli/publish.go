@@ -10,16 +10,12 @@ import (
 	"github.com/suraciii/pages/internal/publish"
 )
 
-func runPublish(args []string) int {
-	return runPublishWithRuntime(args, productionCommandRuntime())
-}
-
-func runPublishWithRuntime(args []string, runtime commandRuntime) int {
+func runPublish(args []string, runtime commandRuntime) int {
 	flags := flag.NewFlagSet("pages publish", flag.ContinueOnError)
 	flags.Usage = subcommandUsage(flags, "Usage: pages publish [flags]")
 	filePath := flags.String("file", "", "HTML or zip file to publish (required)")
 	slug := flags.String("slug", "", "page slug (required)")
-	destinationValue := destinationFlags(flags, runtime.environment)
+	destinationValue := destinationFlags(flags)
 	identity := flags.String("identity", "", "named identity; default identity when empty")
 	timeout := flags.Duration("timeout", 90*time.Second, "upload and verification timeout")
 	configDir := flags.String("config-dir", runtime.environment("PAGES_CONFIG_DIR"), "configuration directory")
@@ -53,7 +49,7 @@ func runPublishWithRuntime(args []string, runtime commandRuntime) int {
 		}
 	}
 
-	resolved, err := publish.ResolveWithRuntime(publish.Input{
+	resolved, err := publish.Resolve(publish.Input{
 		File:        *filePath,
 		Slug:        *slug,
 		Destination: *destinationValue,
@@ -71,7 +67,7 @@ func runPublishWithRuntime(args []string, runtime commandRuntime) int {
 		return 1
 	}
 
-	result, err := publish.RunWithRuntime(resolved, runtime.publishRuntime())
+	result, err := publish.Run(resolved, runtime.publishRuntime())
 	if err != nil {
 		fmt.Fprintf(runtime.stderr, "pages publish: %v\n", err)
 		return 1

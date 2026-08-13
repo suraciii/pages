@@ -14,7 +14,7 @@ func newMemoryStager(t *testing.T) (*Stager, *filesystem.Memory, string) {
 	t.Helper()
 	fileSystem := filesystem.NewMemory("/workspace")
 	publicRoot := "/public"
-	stager, err := NewStagerWithFS(publicRoot, fileSystem)
+	stager, err := NewStager(publicRoot, fileSystem)
 	if err != nil {
 		t.Fatalf("new stager: %v", err)
 	}

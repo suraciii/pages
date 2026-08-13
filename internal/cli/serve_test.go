@@ -22,8 +22,26 @@ func TestResolveConfigDirDefault(t *testing.T) {
 
 func TestServeRejectsRemoteDestination(t *testing.T) {
 	command := newTestCommand()
-	status := runServeWithRuntime([]string{"--dest", "https://pages.example.com"}, command.runtime)
+	status := runServe([]string{"--dest", "https://pages.example.com"}, command.runtime)
 	if status != 2 || !strings.Contains(command.stderr.String(), "destination must be a local path") {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
+	}
+}
+
+func TestServeUsesDestinationEnvironment(t *testing.T) {
+	command := newTestCommand()
+	command.environment["PAGES_DESTINATION"] = "https://pages.example.com"
+	status := runServe(nil, command.runtime)
+	if status != 2 || !strings.Contains(command.stderr.String(), "destination must be a local path") {
+		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
+	}
+}
+
+func TestServeDestinationFlagOverridesEnvironment(t *testing.T) {
+	command := newTestCommand()
+	command.environment["PAGES_DESTINATION"] = "https://pages.example.com"
+	status := runServe([]string{"--dest", "/public", "--tokens-file", "/missing/tokens.json"}, command.runtime)
+	if status != 1 || !strings.Contains(command.stderr.String(), "tokens file must contain") {
 		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
 }
@@ -47,9 +65,9 @@ func TestCommandsFailWhenUserConfigDirIsUnavailable(t *testing.T) {
 			command := newTestCommand()
 			command.runtime.userConfigDir = func() (string, error) { return "", errors.New("unavailable") }
 			args := []string(nil)
-			status := runGenerateTokenWithRuntime(args, command.runtime)
+			status := runGenerateToken(args, command.runtime)
 			if name == "serve" {
-				status = runServeWithRuntime(args, command.runtime)
+				status = runServe(args, command.runtime)
 			}
 			if status != 1 || !strings.Contains(command.stderr.String(), "determine user config directory") {
 				t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
@@ -66,7 +84,7 @@ func TestPublishWithoutUserConfigDirDoesNotReadCurrentDirectoryConfig(t *testing
 	command.runtime.userConfigDir = func() (string, error) { return "", errors.New("unavailable") }
 	command.writeFile(t, "report.html", "<h1>ready</h1>")
 	command.writeFile(t, "config.json", `{"destination":"/wrong"}`)
-	status := runPublishWithRuntime([]string{"--file", "report.html", "--slug", "report"}, command.runtime)
+	status := runPublish([]string{"--file", "report.html", "--slug", "report"}, command.runtime)
 	if status != 0 || command.stderr.Len() != 0 {
 		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
@@ -85,7 +103,7 @@ func TestPublishWithoutUserConfigDirDoesNotReadCurrentDirectoryConfig(t *testing
 func TestExplicitTokenFileSkipsUserConfigDir(t *testing.T) {
 	command := newTestCommand()
 	command.runtime.userConfigDir = func() (string, error) { return "", errors.New("must not be called") }
-	if status := runGenerateTokenWithRuntime([]string{"--tokens-file", "/mounted/tokens.json"}, command.runtime); status != 0 {
+	if status := runGenerateToken([]string{"--tokens-file", "/mounted/tokens.json"}, command.runtime); status != 0 {
 		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
 	if _, err := command.fileSystem.Stat("/mounted/tokens.json"); err != nil {
@@ -96,7 +114,7 @@ func TestExplicitTokenFileSkipsUserConfigDir(t *testing.T) {
 func TestServeExactTokenFileSkipsUserConfigDir(t *testing.T) {
 	command := newTestCommand()
 	command.runtime.userConfigDir = func() (string, error) { return "", errors.New("must not be called") }
-	status := runServeWithRuntime([]string{"--tokens-file", "/missing/tokens.json"}, command.runtime)
+	status := runServe([]string{"--tokens-file", "/missing/tokens.json"}, command.runtime)
 	if status != 1 || strings.Contains(command.stderr.String(), "user config directory") || !strings.Contains(command.stderr.String(), "tokens file must contain") {
 		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
@@ -106,7 +124,7 @@ func TestConfigDirectoryEnvironmentSkipsUserConfigDir(t *testing.T) {
 	command := newTestCommand()
 	command.environment["PAGES_CONFIG_DIR"] = "/mounted/pages-config"
 	command.runtime.userConfigDir = func() (string, error) { return "", errors.New("must not be called") }
-	if status := runGenerateTokenWithRuntime(nil, command.runtime); status != 0 {
+	if status := runGenerateToken(nil, command.runtime); status != 0 {
 		t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 	}
 	if _, err := command.fileSystem.Stat("/mounted/pages-config/tokens.json"); err != nil {
@@ -118,7 +136,7 @@ func TestServeDestinationAliasDefaultsToCurrentDirectoryBeforeReadingTokens(t *t
 	for _, flagName := range []string{"--destination", "--dest"} {
 		t.Run(flagName, func(t *testing.T) {
 			command := newTestCommand()
-			status := runServeWithRuntime([]string{flagName, "/public", "--tokens-file", "/missing/tokens.json"}, command.runtime)
+			status := runServe([]string{flagName, "/public", "--tokens-file", "/missing/tokens.json"}, command.runtime)
 			if status != 1 || !strings.Contains(command.stderr.String(), "tokens file must contain") {
 				t.Fatalf("status = %d, stderr = %q", status, command.stderr.String())
 			}

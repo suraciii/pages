@@ -7,10 +7,10 @@ import (
 	"github.com/suraciii/pages/internal/destination"
 )
 
-func destinationFlags(flags *flag.FlagSet, environment func(string) string) *string {
-	value := environment("PAGES_DESTINATION")
-	flags.StringVar(&value, "destination", value, "local path or HTTP(S) URL (default current directory)")
-	flags.StringVar(&value, "dest", value, "alias for --destination")
+func destinationFlags(flags *flag.FlagSet) *string {
+	value := ""
+	flags.StringVar(&value, "destination", "", "local path or HTTP(S) URL (default current directory)")
+	flags.StringVar(&value, "dest", "", "alias for --destination")
 	return &value
 }
 
@@ -18,7 +18,7 @@ func parseDestinationFlags(flags *flag.FlagSet, value string, localOnly bool, cu
 	if err := rejectDestinationAliasConflict(flags); err != nil {
 		return destination.Value{}, err
 	}
-	resolved, err := destination.ParseWithCurrentDirectory(value, currentDirectory)
+	resolved, err := destination.Parse(value, currentDirectory)
 	if err != nil {
 		return destination.Value{}, err
 	}

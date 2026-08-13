@@ -1,4 +1,4 @@
-//go:build aix || darwin || dragonfly || freebsd || illumos || linux || netbsd || openbsd || solaris
+//go:build darwin || linux
 
 package filesystem
 

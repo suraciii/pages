@@ -34,7 +34,7 @@ func TestResolveLocalModeDefaultsIdentityAndIgnoresUploadToken(t *testing.T) {
 		"PAGES_DESTINATION":  "/public",
 		"PAGES_UPLOAD_TOKEN": "bumble.secret",
 	})
-	resolved, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestResolveLocalModeDefaultsIdentityAndIgnoresUploadToken(t *testing.T) {
 
 func TestResolveLocalNamedIdentity(t *testing.T) {
 	runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "/public"})
-	resolved, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestResolveLocalNamedIdentity(t *testing.T) {
 
 func TestResolveLocalModeDefaultsToCurrentDirectory(t *testing.T) {
 	runtime, _ := testRuntime(nil)
-	resolved, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestResolveRemoteDefaultTokenFromEnvironment(t *testing.T) {
 		"PAGES_DESTINATION":  "https://pages.example.com",
 		"PAGES_UPLOAD_TOKEN": "default-secret",
 	})
-	resolved, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestResolveEnvironmentTokenIgnoresInvalidFlagIdentity(t *testing.T) {
 		"PAGES_DESTINATION":  "https://pages.example.com",
 		"PAGES_UPLOAD_TOKEN": "default-secret",
 	})
-	resolved, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Identity: "Bad", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "Bad", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestResolveRemoteNamedTokenFromEnvironment(t *testing.T) {
 		"PAGES_DESTINATION":  "https://pages.example.com",
 		"PAGES_UPLOAD_TOKEN": "bumble.secret",
 	})
-	resolved, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestResolveRemoteTokensFromConfig(t *testing.T) {
 	mustWriteFile(t, fileSystem, configPath, `{"destination":"https://pages.example.com","token":"default-secret","identities":{"bumble":"secret"}}`)
 
 	for identity, wantToken := range map[string]string{"": "default-secret", "bumble": "bumble.secret"} {
-		resolved, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Identity: identity, Timeout: time.Minute, ConfigPath: configPath}, runtime)
+		resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: identity, Timeout: time.Minute, ConfigPath: configPath}, runtime)
 		if err != nil {
 			t.Fatalf("resolve %q: %v", identity, err)
 		}
@@ -134,7 +134,7 @@ func TestResolveDestinationPrecedence(t *testing.T) {
 		"environment": {File: "page.html", Slug: "report", Timeout: time.Minute, ConfigPath: configPath},
 	} {
 		t.Run(name, func(t *testing.T) {
-			resolved, err := ResolveWithRuntime(input, runtime)
+			resolved, err := Resolve(input, runtime)
 			if err != nil {
 				t.Fatalf("resolve: %v", err)
 			}
@@ -164,7 +164,7 @@ func TestLoadConfigRejectsLegacyDestinationFields(t *testing.T) {
 
 func TestResolveRemoteModeRequiresSelectedToken(t *testing.T) {
 	runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com"})
-	_, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if !errors.Is(err, ErrUsage) {
 		t.Fatalf("err = %v, want usage error", err)
 	}
@@ -172,7 +172,7 @@ func TestResolveRemoteModeRequiresSelectedToken(t *testing.T) {
 
 func TestResolveNamedConfigMustExist(t *testing.T) {
 	runtime, _ := testRuntime(nil)
-	_, err := ResolveWithRuntime(Input{File: "page.html", Slug: "report", Timeout: time.Minute, ConfigPath: "/config/missing.json"}, runtime)
+	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute, ConfigPath: "/config/missing.json"}, runtime)
 	if err == nil || errors.Is(err, ErrUsage) {
 		t.Fatalf("err = %v, want config read error", err)
 	}
@@ -193,7 +193,7 @@ func TestRunLocalPublishesDefaultAndNamedHTML(t *testing.T) {
 	mustWriteFile(t, fileSystem, pageFile, "<!doctype html><h1>local</h1>")
 
 	for identity, relative := range map[string]string{"": "report", "bumble": filepath.Join("@bumble", "report")} {
-		output, err := RunWithRuntime(&Resolved{File: pageFile, Slug: "report", Identity: identity, Destination: localDestination(t, "/public")}, runtime)
+		output, err := Run(&Resolved{File: pageFile, Slug: "report", Identity: identity, Destination: localDestination(t, "/public")}, runtime)
 		if err != nil {
 			t.Fatalf("run %q: %v", identity, err)
 		}
@@ -217,7 +217,7 @@ func TestRunLocalPublishesDefaultZip(t *testing.T) {
 	zipFile := "/source/page.zip"
 	writeTestZip(t, fileSystem, zipFile, map[string]string{"index.html": "<h1>zip</h1>", "img/chart.png": "png"})
 
-	output, err := RunWithRuntime(&Resolved{File: zipFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime)
+	output, err := Run(&Resolved{File: zipFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -240,10 +240,10 @@ func TestRunLocalHTMLReplacesCompleteZipPage(t *testing.T) {
 	writeTestZip(t, fileSystem, zipFile, map[string]string{"index.html": "zip", "img/stale.png": "stale"})
 	mustWriteFile(t, fileSystem, htmlFile, "html")
 
-	if _, err := RunWithRuntime(&Resolved{File: zipFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
+	if _, err := Run(&Resolved{File: zipFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
 		t.Fatalf("publish zip: %v", err)
 	}
-	if _, err := RunWithRuntime(&Resolved{File: htmlFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
+	if _, err := Run(&Resolved{File: htmlFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
 		t.Fatalf("publish HTML: %v", err)
 	}
 	page, err := fileSystem.ReadFile("/public/report/index.html")
@@ -257,7 +257,7 @@ func TestRunLocalHTMLReplacesCompleteZipPage(t *testing.T) {
 
 func TestRunLocalLeavesOtherActiveStaging(t *testing.T) {
 	runtime, fileSystem := testRuntime(nil)
-	stager, err := pages.NewStagerWithFS("/public", fileSystem)
+	stager, err := pages.NewStager("/public", fileSystem)
 	if err != nil {
 		t.Fatalf("new stager: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestRunLocalLeavesOtherActiveStaging(t *testing.T) {
 	}
 	mustWriteFile(t, fileSystem, "/source/page.html", "page")
 
-	if _, err := RunWithRuntime(&Resolved{File: "/source/page.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
+	if _, err := Run(&Resolved{File: "/source/page.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 	if _, err := fileSystem.Stat(active); err != nil {
@@ -279,7 +279,7 @@ func TestRunLocalRejectsBadZipAndLeavesNoTrace(t *testing.T) {
 	runtime, fileSystem := testRuntime(nil)
 	writeTestZip(t, fileSystem, "/source/bad.zip", map[string]string{"report.html": "no index"})
 
-	if _, err := RunWithRuntime(&Resolved{File: "/source/bad.zip", Slug: "report", Destination: localDestination(t, "/public")}, runtime); err == nil {
+	if _, err := Run(&Resolved{File: "/source/bad.zip", Slug: "report", Destination: localDestination(t, "/public")}, runtime); err == nil {
 		t.Fatal("run succeeded, want zip validation error")
 	}
 	if _, err := fileSystem.Stat("/public/report"); !errors.Is(err, fs.ErrNotExist) {
@@ -289,7 +289,7 @@ func TestRunLocalRejectsBadZipAndLeavesNoTrace(t *testing.T) {
 
 func localDestination(t *testing.T, path string) destination.Value {
 	t.Helper()
-	value, err := destination.ParseWithCurrentDirectory(path, func() (string, error) { return "/workspace", nil })
+	value, err := destination.Parse(path, func() (string, error) { return "/workspace", nil })
 	if err != nil {
 		t.Fatalf("parse destination: %v", err)
 	}

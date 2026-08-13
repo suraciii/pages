@@ -99,8 +99,7 @@ The command prints the Page directory:
 <current-directory>/pages-public/report/
 ```
 
-The local Public Root comes from `--destination`, `--dest`,
-`PAGES_DESTINATION`, or the config file. If none is set, `pages publish` uses
-the current working directory. See
-[configuration.md](configuration.md) for the Publish inputs and
-[publishing.md](publishing.md) for optional Named Identity scopes.
+See [configuration.md](configuration.md) for Publish inputs,
+[the command contract](../design/cli.md#pages-publish) for their exact
+precedence, and [publishing.md](publishing.md) for optional Named Identity
+scopes.

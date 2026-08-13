@@ -21,6 +21,7 @@ truth for what is done and what is next.
   [docs/publishing.md](docs/publishing.md).
 - Serve operations: `GET /healthz`, tokens reload on `SIGHUP`, one startup
   log line with the resolved configuration.
+- The pages program supports Linux, macOS, and Windows.
 - The Go module is `github.com/suraciii/pages`.
 
 ## Next

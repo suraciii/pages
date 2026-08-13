@@ -101,14 +101,9 @@ func (tokens Tokens) validate(requireToken bool) error {
 	return nil
 }
 
-// LoadTokens reads a non-empty tokens file.
-func LoadTokens(path string) (Tokens, error) {
-	return LoadTokensWithFS(filesystem.OS, path)
-}
-
-// LoadTokensWithFS reads a non-empty tokens file through fileSystem.
-func LoadTokensWithFS(fileSystem filesystem.FS, path string) (Tokens, error) {
-	tokens, err := ReadTokensFileWithFS(fileSystem, path)
+// LoadTokens reads a non-empty tokens file through fileSystem.
+func LoadTokens(fileSystem filesystem.FS, path string) (Tokens, error) {
+	tokens, err := ReadTokensFile(fileSystem, path)
 	if err != nil {
 		return Tokens{}, err
 	}
@@ -118,13 +113,9 @@ func LoadTokensWithFS(fileSystem filesystem.FS, path string) (Tokens, error) {
 	return tokens, nil
 }
 
-// ReadTokensFile reads structured Tokens. A missing file yields empty Tokens.
-func ReadTokensFile(path string) (Tokens, error) {
-	return ReadTokensFileWithFS(filesystem.OS, path)
-}
-
-// ReadTokensFileWithFS reads structured Tokens through fileSystem.
-func ReadTokensFileWithFS(fileSystem filesystem.FS, path string) (Tokens, error) {
+// ReadTokensFile reads structured Tokens through fileSystem. A missing file
+// yields empty Tokens.
+func ReadTokensFile(fileSystem filesystem.FS, path string) (Tokens, error) {
 	file, err := fileSystem.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -149,13 +140,8 @@ func ReadTokensFileWithFS(fileSystem filesystem.FS, path string) (Tokens, error)
 	return tokens, nil
 }
 
-// WriteTokensFile saves Tokens atomically with mode 0600.
-func WriteTokensFile(path string, tokens Tokens) error {
-	return WriteTokensFileWithFS(filesystem.OS, path, tokens)
-}
-
-// WriteTokensFileWithFS saves Tokens atomically through fileSystem.
-func WriteTokensFileWithFS(fileSystem filesystem.FS, path string, tokens Tokens) error {
+// WriteTokensFile saves Tokens atomically through fileSystem.
+func WriteTokensFile(fileSystem filesystem.FS, path string, tokens Tokens) error {
 	if err := tokens.validate(true); err != nil {
 		return err
 	}
@@ -190,14 +176,8 @@ func WriteTokensFileWithFS(fileSystem filesystem.FS, path string, tokens Tokens)
 	return nil
 }
 
-// IssueToken serializes the complete read, check, and atomic write operation.
-func IssueToken(path, identity string, replace bool) (string, error) {
-	return IssueTokenWithFS(filesystem.OS, path, identity, replace)
-}
-
-// IssueTokenWithFS performs the complete Token transaction through
-// fileSystem.
-func IssueTokenWithFS(fileSystem filesystem.FS, path, identity string, replace bool) (string, error) {
+// IssueToken performs the complete Token transaction through fileSystem.
+func IssueToken(fileSystem filesystem.FS, path, identity string, replace bool) (string, error) {
 	if identity != "" && !ValidName(identity) {
 		return "", fmt.Errorf("invalid identity %q", identity)
 	}
@@ -213,7 +193,7 @@ func IssueTokenWithFS(fileSystem filesystem.FS, path, identity string, replace b
 	}
 	defer unlock()
 
-	tokens, err := ReadTokensFileWithFS(fileSystem, path)
+	tokens, err := ReadTokensFile(fileSystem, path)
 	if err != nil {
 		return "", err
 	}
@@ -240,7 +220,7 @@ func IssueTokenWithFS(fileSystem filesystem.FS, path, identity string, replace b
 		}
 		tokens.Identities[identity] = secret
 	}
-	if err := WriteTokensFileWithFS(fileSystem, path, tokens); err != nil {
+	if err := WriteTokensFile(fileSystem, path, tokens); err != nil {
 		return "", err
 	}
 	if identity == "" {

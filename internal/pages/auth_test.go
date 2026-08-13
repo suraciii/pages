@@ -68,7 +68,7 @@ func TestIdentityScope(t *testing.T) {
 
 func TestReadTokensFileMissingYieldsEmptyTokens(t *testing.T) {
 	fileSystem := filesystem.NewMemory("/workspace")
-	tokens, err := ReadTokensFileWithFS(fileSystem, "/config/missing.json")
+	tokens, err := ReadTokensFile(fileSystem, "/config/missing.json")
 	if err != nil {
 		t.Fatalf("read missing file: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestReadTokensFileRejectsUnknownAndInvalidEntries(t *testing.T) {
 			fileSystem := filesystem.NewMemory("/workspace")
 			path := "/config/tokens.json"
 			mustWriteMemoryFile(t, fileSystem, path, body)
-			if _, err := ReadTokensFileWithFS(fileSystem, path); err == nil {
+			if _, err := ReadTokensFile(fileSystem, path); err == nil {
 				t.Fatal("read succeeded, want error")
 			}
 		})
@@ -103,15 +103,15 @@ func TestWriteTokensFileCreatesAndKeepsScopes(t *testing.T) {
 		t.Fatalf("create config: %v", err)
 	}
 	tokens := Tokens{Token: "default-secret", Identities: map[string]string{"bumble": "secret-one"}}
-	if err := WriteTokensFileWithFS(fileSystem, path, tokens); err != nil {
+	if err := WriteTokensFile(fileSystem, path, tokens); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	tokens.Identities["fizz"] = "secret-two"
-	if err := WriteTokensFileWithFS(fileSystem, path, tokens); err != nil {
+	if err := WriteTokensFile(fileSystem, path, tokens); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	reloaded, err := ReadTokensFileWithFS(fileSystem, path)
+	reloaded, err := ReadTokensFile(fileSystem, path)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestWriteTokensFileCreatesAndKeepsScopes(t *testing.T) {
 
 func TestWriteTokensFileRejectsEmpty(t *testing.T) {
 	fileSystem := filesystem.NewMemory("/workspace")
-	if err := WriteTokensFileWithFS(fileSystem, "/config/tokens.json", Tokens{}); err == nil {
+	if err := WriteTokensFile(fileSystem, "/config/tokens.json", Tokens{}); err == nil {
 		t.Fatal("write succeeded, want error for empty Tokens")
 	}
 }
@@ -138,7 +138,7 @@ func TestIssueTokenCreatesPrivateParentDirectory(t *testing.T) {
 	fileSystem := filesystem.NewMemory("/workspace")
 	parent := "/config/pages"
 	path := filepath.Join(parent, "tokens.json")
-	if _, err := IssueTokenWithFS(fileSystem, path, "", false); err != nil {
+	if _, err := IssueToken(fileSystem, path, "", false); err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	info, err := fileSystem.Stat(parent)
@@ -169,7 +169,7 @@ func TestIssueTokenConcurrentCallsKeepEveryIdentity(t *testing.T) {
 		go func() {
 			defer waitGroup.Done()
 			identity := "identity-" + strconv.Itoa(index)
-			_, err := IssueTokenWithFS(transactionFileSystem, path, identity, false)
+			_, err := IssueToken(transactionFileSystem, path, identity, false)
 			errorsChannel <- err
 		}()
 	}
@@ -181,7 +181,7 @@ func TestIssueTokenConcurrentCallsKeepEveryIdentity(t *testing.T) {
 		}
 	}
 
-	tokens, err := ReadTokensFileWithFS(fileSystem, path)
+	tokens, err := ReadTokensFile(fileSystem, path)
 	if err != nil {
 		t.Fatalf("read tokens: %v", err)
 	}

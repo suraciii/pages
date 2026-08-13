@@ -114,9 +114,8 @@ A local Publish writes directly into a Public Root and does not use a service
 or network. `--identity` selects an optional Named Identity. Both modes
 prepare a complete Page before they replace the old Page.
 
-`--destination` and its `--dest` alias accept either a local path or an
-absolute HTTP(S) URL. When neither is set, local Publish uses the current
-directory.
+See the [`pages publish` command contract](design/cli.md#pages-publish) for
+Destination syntax, defaults, and input precedence.
 
 ## Documentation
 
