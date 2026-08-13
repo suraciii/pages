@@ -48,6 +48,9 @@ start a process, or use an external service.
 - CLI tests inject stdout, stderr, the environment, the working directory, and
   user config directory discovery. They cover root command dispatch and the
   minimal local publish command without a Destination.
+- Skill command tests capture stdout and stderr in memory. They prove that the
+  embedded output is a complete skill, help does not print the skill, invalid
+  arguments are usage errors, and no process capability is consulted.
 
 ## Gate
 

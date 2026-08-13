@@ -23,6 +23,8 @@ func run(args []string, runtime commandRuntime) int {
 		return runPublish(args[1:], runtime)
 	case "generate-token":
 		return runGenerateToken(args[1:], runtime)
+	case "skill":
+		return runSkill(args[1:], runtime.stdout, runtime.stderr)
 	default:
 		fmt.Fprintf(runtime.stderr, "pages: unknown command %q\n", args[0])
 		printUsage(runtime.stderr)
