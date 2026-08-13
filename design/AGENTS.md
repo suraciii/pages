@@ -23,10 +23,7 @@ agents who implement the design, not for readers tracing the current code.
 - Use the minimal structure: Design Drivers / Model / Semantics / Examples /
   Status.
 - The body is the target design; implementation gaps go to Status.
-- Use `text diagram` fences for ASCII diagrams and `text literal` fences for
-  command output, syntax, protocols, and pseudocode. Bare `text` fences are
-  invalid.
-- Use ASCII only in diagrams. Do not use PlantUML, Mermaid, Unicode line art,
-  or Unicode arrows. Do not use raw HTML.
+- Follow the language, structure, and markup rules in
+  [`../docs/writing-style.md`](../docs/writing-style.md).
 
 Full conventions: [`README.md`](README.md).
