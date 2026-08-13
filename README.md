@@ -61,6 +61,17 @@ See [docs/publishing.md](docs/publishing.md) for the product spec,
 [docs/getting-started.md](docs/getting-started.md) to set pages up,
 and [design/architecture.md](design/architecture.md) for the design.
 
+## Skill
+
+The [pages skill](skills/pages/SKILL.md) teaches an agent how to publish
+with this product. Install it into the agent skill directory:
+
+```bash
+mkdir -p ~/.agents/skills && cp -r skills/pages ~/.agents/skills/
+```
+
+The skill is a single file. Copy it again after each update.
+
 ## Build And Test
 
 ```bash
