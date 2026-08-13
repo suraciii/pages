@@ -9,6 +9,8 @@ Minimal static page publishing. One Go command with three subcommands:
 
 The service intentionally does not implement archives, revisions, histories, rollback, SQLite, or CI.
 
+Released under the GNU AGPL-3.0. See [LICENSE](LICENSE).
+
 ## Install
 
 Install the binary with the Go toolchain:
