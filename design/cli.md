@@ -68,8 +68,8 @@ down gracefully.
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --destination, --dest | PAGES_DESTINATION | current directory | no |
-| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
-| --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/.pages | no |
+| --tokens-file | PAGES_TOKENS_FILE | user config directory/.pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
 | --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
 
@@ -80,7 +80,7 @@ maintains everything under it, including the internal `.pages/` staging area.
 See [architecture.md](architecture.md).
 
 `serve` and `generate-token` share `tokens.json` under the configuration
-directory by default. The default configuration directory is `pages/` under
+directory by default. The default configuration directory is `.pages/` under
 the operating system's user config directory. `--config-dir` overrides
 `PAGES_CONFIG_DIR`; `--tokens-file` and `PAGES_TOKENS_FILE` select an exact
 Token file and take precedence over the directory.
@@ -133,8 +133,8 @@ selects one entry from `config.identities`.
 | --destination, --dest | PAGES_DESTINATION | current directory | no |
 | --identity | none | Default Identity | no |
 | --timeout | none | 90s | no |
-| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
-| --config | none | user config directory/pages/config.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/.pages | no |
+| --config | none | user config directory/.pages/config.json | no |
 
 ### Config file
 
@@ -154,7 +154,7 @@ environment values always win over the config file. JSON format:
 ```
 
 - The default path is `config.json` under the configuration directory. The
-  default directory is `pages/` under the operating system's user config
+  default directory is `.pages/` under the operating system's user config
   directory. `--config-dir` overrides `PAGES_CONFIG_DIR`; `--config` names an
   exact file and takes precedence over the directory. A missing default file
   is fine; a named file must exist.
@@ -246,8 +246,8 @@ service is involved.
 | Argument | Environment | Default | Required |
 | --- | --- | --- | --- |
 | identity (positional) | none | Default Identity | no |
-| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
-| --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/.pages | no |
+| --tokens-file | PAGES_TOKENS_FILE | user config directory/.pages/tokens.json | no |
 | --replace | none | false | no |
 
 Steps:
@@ -304,9 +304,9 @@ pages serve --destination pages-public
 
 pages generate-token bumble
 
-PAGES_UPLOAD_TOKEN='bumble.secret' pages publish --file report.zip --slug report --dest https://pages.example.com
+pages publish --file report.zip --slug report --dest https://pages.example.com --config publisher.json
 
-pages publish --file report.zip --slug report --config <user-config-dir>/pages/config.json
+pages publish --file report.zip --slug report --config <user-config-dir>/.pages/config.json
 
 pages skill
 ```

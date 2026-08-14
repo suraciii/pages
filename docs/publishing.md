@@ -9,11 +9,12 @@ Root. An absolute HTTP(S) URL Uploads through the service and verifies the
 public URL. When Destination is not set, the current working directory is the
 Public Root.
 
-Remote mode uses a Token and verifies the public URL:
+Remote mode uses a Token and verifies the public URL. Set
+`PAGES_UPLOAD_TOKEN` in the Publisher's process environment, then run:
 
 ```text literal
-PAGES_UPLOAD_TOKEN='secret' pages publish \
-  --file report.html --slug report --dest https://pages.example.com
+pages publish --file report.html --slug report \
+  --dest https://pages.example.com
 https://pages.example.com/report/
 ```
 
@@ -54,11 +55,12 @@ The `@` prefix keeps Named Identity scopes separate from Default Identity
 Slugs. A Default Identity zip Page can contain any internal path without
 overlapping a Named Identity.
 
-Named remote example:
+For a Named remote Publish, set `PAGES_UPLOAD_TOKEN` to a Token in
+`identity.secret` form, then run:
 
 ```text literal
-PAGES_UPLOAD_TOKEN='bumble.secret' pages publish \
-  --file report.html --slug report --dest https://pages.example.com
+pages publish --file report.html --slug report \
+  --dest https://pages.example.com
 https://pages.example.com/@bumble/report/
 ```
 

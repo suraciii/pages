@@ -17,8 +17,8 @@ diverges significantly from the code, it lists a `Gap` section.
   before writing a spec in `design/`.
 - [architecture.md](architecture.md) — write path, read path, the identity
   boundary, and atomic replacement.
-- [cli.md](cli.md) — the `pages` command: `serve`, `publish`, and
-  `generate-token` subcommands, flags, output, and exit codes.
+- [cli.md](cli.md) — the `pages` command: `serve`, `publish`,
+  `generate-token`, and `skill` subcommands, flags, output, and exit codes.
 - [deployment.md](deployment.md) — hosting the public root: host
   requirements, the Caddy reference, and the verification path.
 - [testing.md](testing.md) — unit test strategy and the verification gate.

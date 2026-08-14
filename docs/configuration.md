@@ -31,10 +31,10 @@ pages generate-token bumble
 ```
 
 `generate-token` and `serve` use `tokens.json` under the configuration
-directory by default. The default configuration directory is `pages/` under
+directory by default. The default configuration directory is `.pages/` under
 the operating system's user config directory. On Linux this is typically
-`~/.config/pages`; on macOS it is typically under `~/Library/Application
-Support`; on Windows it is typically under `%AppData%`.
+`~/.config/.pages`; on macOS it is typically `~/Library/Application
+Support/.pages`; on Windows it is typically `%AppData%\.pages`.
 
 Use `--config-dir` or `PAGES_CONFIG_DIR` to choose another configuration
 directory. `--config-dir` takes precedence over `PAGES_CONFIG_DIR`. Use
@@ -64,8 +64,8 @@ pages serve --destination pages-public
 | Flag | Environment | Default | Required |
 | --- | --- | --- | --- |
 | --destination, --dest | PAGES_DESTINATION | current directory | no |
-| --config-dir | PAGES_CONFIG_DIR | user config directory/pages | no |
-| --tokens-file | PAGES_TOKENS_FILE | user config directory/pages/tokens.json | no |
+| --config-dir | PAGES_CONFIG_DIR | user config directory/.pages | no |
+| --tokens-file | PAGES_TOKENS_FILE | user config directory/.pages/tokens.json | no |
 | --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
 | --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
 
@@ -79,7 +79,7 @@ tokens. The Destination must be a local path. Serve rejects a URL.
 The config file supplies defaults for every publish input. Flag and
 environment values always win over the config file. The file is
 `config.json` under the configuration directory. The default directory is
-`pages/` under the operating system's user config directory. Use
+`.pages/` under the operating system's user config directory. Use
 `--config-dir` or `PAGES_CONFIG_DIR` to choose another directory, or use
 `--config` to choose an exact file:
 

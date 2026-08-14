@@ -22,8 +22,13 @@ start a process, or use an external service.
 - Zip tests build archives in memory with `archive/zip` and cover: a valid
   directory page, a missing root `index.html`, directory entries that are
   skipped, symlink entries, path traversal names, absolute names,
-  backslashes, leading-dot names, non-UTF-8 names, duplicate names, too
-  many entries, and an oversized uncompressed total.
+  non-canonical names, backslashes, leading-dot names, non-UTF-8 names,
+  exact and case-insensitive duplicate names, too many entries, and an
+  oversized uncompressed total.
+- Content-Type tests cover HTML with no parameter, HTML with only
+  `charset=utf-8`, parameter-free zip, and rejection of every other parameter.
+- Rejected HTML Upload tests assert that the existing Page and staging area
+  are unchanged.
 - Swap tests cover: first publish, replace of a directory page, the
   replacement of a zip Page with a single-file Page, the brief-absence window
   is not asserted but the end state is, and startup recovery restores

@@ -12,8 +12,7 @@ Install the binary with the Go toolchain:
 go install github.com/suraciii/pages@latest
 ```
 
-The binary lands in `$(go env GOPATH)/bin/pages`. Put that directory on
-the `PATH` of the service host.
+Make sure Go's binary install directory is on the service host's `PATH`.
 
 Developers build from the repository instead:
 
@@ -38,7 +37,7 @@ The command prints the Token once:
 ```
 
 Keep the printed Token for the Publisher. `generate-token` creates
-`pages/tokens.json` under the operating system's user config directory with
+`.pages/tokens.json` under the operating system's user config directory with
 mode `0600`. See
 [configuration.md](configuration.md) for the tokens file rules.
 
@@ -71,7 +70,6 @@ the public URL as the Destination:
 
 ```text literal
 printf '<!doctype html><title>Report</title><h1>Ready</h1>\n' > report.html
-export PAGES_UPLOAD_TOKEN='7v9A_example-secret'
 pages publish --file report.html --slug report \
   --dest https://pages.example.com
 ```

@@ -150,18 +150,19 @@ func (server *Server) publishHTML(writer http.ResponseWriter, request *http.Requ
 	limitedBody := http.MaxBytesReader(writer, request.Body, server.maxUploadBytes)
 	defer limitedBody.Close()
 	validator := &utf8Validator{}
-	bytesWritten, err := io.Copy(indexFile, io.TeeReader(limitedBody, validator))
-	if err != nil {
-		return fmt.Errorf("write upload: %w", err)
+	bytesWritten, copyError := io.Copy(indexFile, io.TeeReader(limitedBody, validator))
+	closeError := indexFile.Close()
+	if copyError != nil {
+		return fmt.Errorf("write upload: %w", copyError)
+	}
+	if closeError != nil {
+		return fmt.Errorf("close page: %w", closeError)
 	}
 	if bytesWritten == 0 {
 		return errEmptyBody
 	}
 	if !validator.Valid() {
 		return errInvalidUTF8
-	}
-	if err := indexFile.Close(); err != nil {
-		return fmt.Errorf("close page: %w", err)
 	}
 	return server.stager.SwapHTML(identity, slug, stagedDir)
 }
@@ -213,10 +214,13 @@ func isUploadContentType(contentType string) bool {
 		return false
 	}
 	if strings.EqualFold(mediaType, "text/html") {
+		if len(parameters) == 0 {
+			return true
+		}
 		charset, found := parameters["charset"]
-		return !found || strings.EqualFold(charset, "utf-8")
+		return len(parameters) == 1 && found && strings.EqualFold(charset, "utf-8")
 	}
-	return strings.EqualFold(mediaType, "application/zip")
+	return strings.EqualFold(mediaType, "application/zip") && len(parameters) == 0
 }
 
 func isMaxBytesError(err error) bool {
