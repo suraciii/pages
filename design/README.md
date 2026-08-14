@@ -21,6 +21,8 @@ diverges significantly from the code, it lists a `Gap` section.
   `generate-token`, and `skill` subcommands, flags, output, and exit codes.
 - [deployment.md](deployment.md) — hosting the public root: host
   requirements, the Caddy reference, and the verification path.
+- [release.md](release.md) — source distribution, release gates, and the
+  immutable tag sequence.
 - [testing.md](testing.md) — unit test strategy and the verification gate.
 
 ## Decision Records
