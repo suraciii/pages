@@ -58,6 +58,7 @@ func TestServerRejectsBadTokenWithoutReplacingExistingPage(t *testing.T) {
 	}
 
 	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "original")
+	assertStagingEmpty(t, server.fileSystem, publicRoot)
 }
 
 func TestServerRejectsTokenWithTamperedIdentity(t *testing.T) {
@@ -92,6 +93,7 @@ func TestServerRejectsInvalidUTF8WithoutReplacingExistingPage(t *testing.T) {
 	}
 
 	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "original")
+	assertStagingEmpty(t, server.fileSystem, publicRoot)
 }
 
 func TestServerRejectsOversizedBodyWithoutReplacingExistingPage(t *testing.T) {
@@ -188,7 +190,10 @@ func TestNewServerRecoversDisplacedPageAtStartup(t *testing.T) {
 }
 
 func TestServerRejectsEmptyChunkedBody(t *testing.T) {
-	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 1024)
+	server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 1024)
+	if response := publishRequest(t, server, "overview", "bumble.secret-one", []byte("original")); response.Code != http.StatusNoContent {
+		t.Fatalf("initial status = %d, want %d", response.Code, http.StatusNoContent)
+	}
 	request := httptest.NewRequest(http.MethodPost, "/overview", bytes.NewReader(nil))
 	request.Header.Set("Authorization", "Bearer bumble.secret-one")
 	request.Header.Set("Content-Type", "text/html; charset=utf-8")
@@ -198,6 +203,33 @@ func TestServerRejectsEmptyChunkedBody(t *testing.T) {
 	server.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	assertPageContent(t, server.fileSystem, publicRoot, "bumble", "overview", "original")
+	assertStagingEmpty(t, server.fileSystem, publicRoot)
+}
+
+func TestUploadContentType(t *testing.T) {
+	tests := []struct {
+		value string
+		valid bool
+	}{
+		{value: "text/html", valid: true},
+		{value: "text/html; charset=utf-8", valid: true},
+		{value: "text/html; charset=UTF-8", valid: true},
+		{value: "application/zip", valid: true},
+		{value: "text/html; charset=iso-8859-1"},
+		{value: "text/html; parameter=value"},
+		{value: "text/html; charset=utf-8; parameter=value"},
+		{value: "application/zip; parameter=value"},
+		{value: "text/plain"},
+		{value: "not a content type"},
+	}
+	for _, test := range tests {
+		t.Run(test.value, func(t *testing.T) {
+			if got := isUploadContentType(test.value); got != test.valid {
+				t.Fatalf("isUploadContentType(%q) = %t, want %t", test.value, got, test.valid)
+			}
+		})
 	}
 }
 

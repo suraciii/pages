@@ -21,8 +21,7 @@ Install the binary with the Go toolchain:
 go install github.com/suraciii/pages@latest
 ```
 
-The binary is at `$(go env GOPATH)/bin/pages`. Put that directory on your
-`PATH`.
+Make sure Go's binary install directory is on your `PATH`.
 
 ## TL;DR
 
@@ -70,10 +69,10 @@ pages.example.com {
 }
 ```
 
-Use the Token printed by `generate-token` to Publish:
+Set `PAGES_UPLOAD_TOKEN` to the Token printed by `generate-token`, then
+Publish:
 
 ```text literal
-export PAGES_UPLOAD_TOKEN='7v9A_example-secret'
 pages publish --file report.html --slug report \
   --dest https://pages.example.com
 ```

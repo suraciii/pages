@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -47,13 +48,15 @@ func StageZip(fileSystem filesystem.FS, zipPath, newDir string, uploadLimit int6
 	for _, entry := range archive.File {
 		name := entry.Name
 		mode := entry.Mode()
-		if err := validZipName(name, mode.IsDir()); err != nil {
+		canonicalName, err := canonicalZipName(name, mode.IsDir())
+		if err != nil {
 			return fmt.Errorf("%w: %v", errInvalidZip, err)
 		}
-		if seen[name] {
+		duplicateKey := strings.ToLower(canonicalName)
+		if seen[duplicateKey] {
 			return fmt.Errorf("%w: duplicate entry %q", errInvalidZip, name)
 		}
-		seen[name] = true
+		seen[duplicateKey] = true
 
 		if mode.IsDir() {
 			continue
@@ -61,7 +64,7 @@ func StageZip(fileSystem filesystem.FS, zipPath, newDir string, uploadLimit int6
 		if mode&os.ModeSymlink != 0 || mode&os.ModeType != 0 {
 			return fmt.Errorf("%w: unsupported entry type %q", errInvalidZip, name)
 		}
-		if name == "index.html" {
+		if canonicalName == "index.html" {
 			rootIndex = true
 		}
 		uncompressed += entry.UncompressedSize64
@@ -103,36 +106,31 @@ func StageZip(fileSystem filesystem.FS, zipPath, newDir string, uploadLimit int6
 	return nil
 }
 
-func validZipName(name string, isDir bool) error {
+func canonicalZipName(name string, isDir bool) (string, error) {
 	if !utf8.ValidString(name) {
-		return fmt.Errorf("entry name is not UTF-8")
+		return "", fmt.Errorf("entry name is not UTF-8")
 	}
 	if name == "" {
-		return errors.New("empty entry name")
+		return "", errors.New("empty entry name")
 	}
 	if strings.HasPrefix(name, "/") {
-		return fmt.Errorf("absolute entry name %q", name)
+		return "", fmt.Errorf("absolute entry name %q", name)
 	}
 	if strings.HasPrefix(name, ".") {
-		return fmt.Errorf("entry name %q starts with a dot", name)
+		return "", fmt.Errorf("entry name %q starts with a dot", name)
 	}
 	if strings.Contains(name, "\\") {
-		return fmt.Errorf("entry name %q contains a backslash", name)
+		return "", fmt.Errorf("entry name %q contains a backslash", name)
 	}
 	if strings.HasSuffix(name, "/") && !isDir {
-		return fmt.Errorf("entry name %q is a file with a trailing slash", name)
+		return "", fmt.Errorf("entry name %q is a file with a trailing slash", name)
 	}
-	cleaned := strings.TrimSuffix(name, "/")
-	if cleaned == "" {
-		return errors.New("entry name is only a slash")
+	canonicalName := strings.TrimSuffix(name, "/")
+	if canonicalName == "" {
+		return "", errors.New("entry name is only a slash")
 	}
-	for _, component := range strings.Split(cleaned, "/") {
-		if component == "" {
-			return fmt.Errorf("entry name %q has an empty component", name)
-		}
-		if component == ".." {
-			return fmt.Errorf("entry name %q escapes the page", name)
-		}
+	if path.Clean(canonicalName) != canonicalName {
+		return "", fmt.Errorf("entry name %q is not canonical", name)
 	}
-	return nil
+	return canonicalName, nil
 }

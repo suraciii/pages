@@ -126,9 +126,10 @@ A zip Upload must pass every rule before extraction:
 - Directory entries are allowed and skipped during extraction. File
   entries must be regular files; symlink and special entries are
   rejected.
-- Entry names must be relative POSIX paths: no absolute paths, no `..`
-  components, no backslashes, no leading dot, valid UTF-8, and no
-  duplicates.
+- Entry names must be canonical relative POSIX paths: no absolute paths,
+  `.` or `..` components, repeated separators, backslashes, leading dot, or
+  invalid UTF-8. Names that differ only by letter case are duplicates to avoid
+  collisions on case-insensitive file systems.
 - At most 512 entries.
 - The total uncompressed size must not exceed four times the upload byte
   limit.

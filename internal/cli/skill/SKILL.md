@@ -22,11 +22,12 @@ Use `--dest <path>` to select another local Public Root. An omitted
 Destination uses the configured Destination, then the current directory.
 
 Remote Publish uses an absolute HTTP(S) Destination and verifies the public
-URL:
+URL. Set `PAGES_UPLOAD_TOKEN` in the Publisher's process environment, then
+run:
 
 ```text literal
-PAGES_UPLOAD_TOKEN='secret' pages publish \
-  --file report.html --slug report --dest https://pages.example.com
+pages publish --file report.html --slug report \
+  --dest https://pages.example.com
 ```
 
 A `.zip` file publishes a directory Page. Its archive root must contain

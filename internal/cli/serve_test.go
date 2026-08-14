@@ -10,7 +10,7 @@ import (
 
 func TestResolveConfigDirDefault(t *testing.T) {
 	command := newTestCommand()
-	wantDir := filepath.Join("/config", "pages")
+	wantDir := filepath.Join("/config", ".pages")
 	got, err := resolveConfigDir(command.runtime, "")
 	if err != nil {
 		t.Fatalf("resolve config directory: %v", err)

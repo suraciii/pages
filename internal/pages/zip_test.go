@@ -130,15 +130,20 @@ func TestServerRejectsZipWithSymlinkEntry(t *testing.T) {
 }
 
 func TestServerRejectsZipWithBadNames(t *testing.T) {
-	for _, name := range []string{"../escape", "/absolute", "a\\b", ".hidden", "a/../b"} {
+	for _, name := range []string{"../escape", "/absolute", "a\\b", ".hidden", "a/../b", "a/./b", "a//b"} {
 		t.Run(name, func(t *testing.T) {
-			server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
+			server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
+			if response := publishRequest(t, server, "report", "bumble.secret-one", []byte("original")); response.Code != http.StatusNoContent {
+				t.Fatalf("initial status = %d, want %d", response.Code, http.StatusNoContent)
+			}
 			body := zipBody(t, fileEntry("index.html", "page"), fileEntry(name, "x"))
 
 			response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
 			if response.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
 			}
+			assertPageContent(t, server.fileSystem, publicRoot, "bumble", "report", "original")
+			assertStagingEmpty(t, server.fileSystem, publicRoot)
 		})
 	}
 }
@@ -154,12 +159,28 @@ func TestServerRejectsZipWithNonUTF8Name(t *testing.T) {
 }
 
 func TestServerRejectsZipWithDuplicateNames(t *testing.T) {
-	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
-	body := zipBody(t, fileEntry("index.html", "page"), fileEntry("index.html", "again"))
+	tests := []struct {
+		name    string
+		entries []zipEntry
+	}{
+		{name: "exact", entries: []zipEntry{fileEntry("index.html", "page"), fileEntry("index.html", "again")}},
+		{name: "letter case", entries: []zipEntry{fileEntry("index.html", "page"), fileEntry("asset.txt", "one"), fileEntry("ASSET.txt", "two")}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server, publicRoot := newTestServer(t, namedTestTokens("bumble", "secret-one"), 4096)
+			if response := publishRequest(t, server, "report", "bumble.secret-one", []byte("original")); response.Code != http.StatusNoContent {
+				t.Fatalf("initial status = %d, want %d", response.Code, http.StatusNoContent)
+			}
+			body := zipBody(t, test.entries...)
 
-	response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+			response := publishZipRequest(t, server, "report", "bumble.secret-one", body)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+			}
+			assertPageContent(t, server.fileSystem, publicRoot, "bumble", "report", "original")
+			assertStagingEmpty(t, server.fileSystem, publicRoot)
+		})
 	}
 }
 

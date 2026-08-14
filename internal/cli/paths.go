@@ -16,7 +16,7 @@ func resolveConfigDir(runtime commandRuntime, configured string) (string, error)
 	if userConfigDir == "" {
 		return "", fmt.Errorf("determine user config directory: operating system returned an empty path")
 	}
-	return filepath.Join(userConfigDir, "pages"), nil
+	return filepath.Join(userConfigDir, ".pages"), nil
 }
 
 func configFilePath(configDir string) string {
