@@ -44,6 +44,11 @@ A host that serves the public root must:
   verification cannot run.
 - Send the reference headers below, or equivalents.
 
+On Unix, pages creates the Public Root, Identity directories, and Page
+directories with mode `0755`. It creates `.pages/` and staging scope
+directories with mode `0700`. The static host can use a separate operating
+system identity without gaining access to staging.
+
 The remote address is fully custom: any host and any path prefix. A deployment
 that mounts the public root under a prefix, for example `handle_path
 /docs/*`, uses that URL in `pages publish --destination`, and uploads go to

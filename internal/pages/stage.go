@@ -30,9 +30,15 @@ func NewStager(publicRoot string, fileSystem filesystem.FS) (*Stager, error) {
 	if publicRoot == "" {
 		return nil, errors.New("public root is required")
 	}
+	if err := fileSystem.MkdirAll(publicRoot, 0o755); err != nil {
+		return nil, fmt.Errorf("create public root: %w", err)
+	}
+	if err := fileSystem.Chmod(publicRoot, 0o755); err != nil {
+		return nil, fmt.Errorf("make public root readable: %w", err)
+	}
 	stagingDir := filepath.Join(publicRoot, ".pages", "staging")
 	if err := fileSystem.MkdirAll(stagingDir, 0o700); err != nil {
-		return nil, fmt.Errorf("create public root: %w", err)
+		return nil, fmt.Errorf("create staging area: %w", err)
 	}
 	stager := &Stager{
 		publicRoot: publicRoot,
@@ -54,6 +60,10 @@ func (stager *Stager) StageDir(identity string) (string, error) {
 	newDir, err := stager.fs.MkdirTemp(identityDir, "new-*")
 	if err != nil {
 		return "", fmt.Errorf("create staging page: %w", err)
+	}
+	if err := stager.fs.Chmod(newDir, 0o755); err != nil {
+		_ = stager.fs.RemoveAll(newDir)
+		return "", fmt.Errorf("make staged page readable: %w", err)
 	}
 	return newDir, nil
 }
@@ -91,8 +101,12 @@ func (stager *Stager) swapPage(identity, slug, stagedDir string) error {
 	defer lock.Unlock()
 
 	targetDir := stager.pageDir(identity, slug)
-	if err := stager.fs.MkdirAll(filepath.Dir(targetDir), 0o755); err != nil {
+	targetParent := filepath.Dir(targetDir)
+	if err := stager.fs.MkdirAll(targetParent, 0o755); err != nil {
 		return fmt.Errorf("create identity directory: %w", err)
+	}
+	if err := stager.fs.Chmod(targetParent, 0o755); err != nil {
+		return fmt.Errorf("make identity directory readable: %w", err)
 	}
 
 	displaced := ""

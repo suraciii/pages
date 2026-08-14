@@ -95,6 +95,8 @@ pages publish (local) ----------------------------------> public root
 - A static host serves the public root read-only. The server never serves
   reads. Caddy is the reference host; any static file server works. See
   [deployment.md](deployment.md).
+- The write path keeps staging private and makes each installed Page readable
+  by the separate static host.
 - `pages publish` has two modes. Remote mode uses one remote address for
   Upload and Verification; the host must route `POST /...` to the
   server, block `/.pages/...`, and serve other requests from the

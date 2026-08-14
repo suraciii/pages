@@ -21,6 +21,9 @@ func (osFS) WriteFile(path string, data []byte, mode fs.FileMode) error {
 }
 func (osFS) Stat(path string) (fs.FileInfo, error)  { return os.Stat(path) }
 func (osFS) Lstat(path string) (fs.FileInfo, error) { return os.Lstat(path) }
+func (osFS) Chmod(path string, mode fs.FileMode) error {
+	return os.Chmod(path, mode)
+}
 func (osFS) MkdirAll(path string, mode fs.FileMode) error {
 	return os.MkdirAll(path, mode)
 }
