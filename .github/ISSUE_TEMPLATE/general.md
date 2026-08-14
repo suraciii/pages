@@ -13,5 +13,5 @@
 
 ## Environment
 
-- pages version (`pages -version`):
+- pages version (`pages --version`):
 - Operating system:

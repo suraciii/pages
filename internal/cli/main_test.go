@@ -21,6 +21,22 @@ func TestRootHelp(t *testing.T) {
 	}
 }
 
+func TestRootVersion(t *testing.T) {
+	command := newTestCommand()
+	status := run([]string{"--version"}, command.runtime)
+	if status != 0 || command.stdout.String() != "pages v1.2.3\n" || command.stderr.Len() != 0 {
+		t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
+	}
+}
+
+func TestRootVersionRejectsArguments(t *testing.T) {
+	command := newTestCommand()
+	status := run([]string{"--version", "extra"}, command.runtime)
+	if status != 2 || command.stdout.Len() != 0 || !strings.Contains(command.stderr.String(), "arguments are not allowed") {
+		t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
+	}
+}
+
 func TestRootUsageErrors(t *testing.T) {
 	for name, args := range map[string][]string{
 		"missing command": nil,

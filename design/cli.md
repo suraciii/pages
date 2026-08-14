@@ -52,11 +52,14 @@ pages serve          [flags]
 pages publish        [flags]
 pages generate-token [flags] [identity]
 pages skill
+pages --version
 ```
 
 `pages` with no subcommand prints usage to stderr and exits 2. `--help` and
-`-h` print usage to stdout and exit 0. Configuration flags belong to their
-subcommands.
+`-h` print usage to stdout and exit 0. `--version` prints `pages <version>` to
+stdout and exits 0. A tagged module install reports its module version. A
+source build without a module version reports `(devel)`. `--version` accepts no
+other arguments. Configuration flags belong to their subcommands.
 
 ## Semantics
 
