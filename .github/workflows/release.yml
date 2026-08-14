@@ -1,0 +1,162 @@
+name: release
+
+run-name: Release ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version tag, for example v0.0.1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate release request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "release must run from main" >&2
+            exit 1
+          fi
+          if [[ ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "version must match vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          if [[ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
+            echo "checkout does not identify the dispatched commit" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "tag already exists: $VERSION" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.mod
+
+      - name: Check repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          make ci
+          go test -race -count=1 ./...
+
+      - name: Cross-build CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/cross-build"
+          mkdir -p "$output"
+          for target in \
+            linux/amd64 linux/arm64 \
+            darwin/amd64 darwin/arm64 \
+            windows/amd64 windows/arm64
+          do
+            os="${target%/*}"
+            arch="${target#*/}"
+            suffix=""
+            if [[ "$os" == "windows" ]]; then
+              suffix=".exe"
+            fi
+            echo "building $target"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -o "$output/pages-$os-$arch$suffix" .
+          done
+
+      - name: Build Docker image
+        run: docker build --tag pages:release-check .
+
+      - name: Create annotated tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --quiet origin main
+          if [[ "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "origin/main changed during release validation" >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$VERSION" "$GITHUB_SHA" --message "pages $VERSION"
+          git push origin "refs/tags/$VERSION"
+
+      - name: Verify remote tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "$(git cat-file -t "refs/tags/$VERSION")" == "tag" ]]
+          remote_refs="$(git ls-remote --tags origin \
+            "refs/tags/$VERSION" "refs/tags/$VERSION^{}")"
+          tag_ref="refs/tags/$VERSION"
+          peeled_ref="refs/tags/$VERSION^{}"
+          tag_object="$(awk -v ref="$tag_ref" '$2 == ref { print $1 }' <<< "$remote_refs")"
+          peeled_commit="$(awk -v ref="$peeled_ref" '$2 == ref { print $1 }' <<< "$remote_refs")"
+          [[ -n "$tag_object" ]]
+          [[ "$peeled_commit" == "$GITHUB_SHA" ]]
+          [[ "$tag_object" != "$peeled_commit" ]]
+
+      - name: Check exact-tag install
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          module="github.com/suraciii/pages"
+          install_root="$(mktemp -d)"
+          trap 'rm -rf "$install_root"' EXIT
+          mkdir -p "$install_root/bin"
+
+          GOBIN="$install_root/bin" GOPROXY=direct GONOSUMDB="$module" \
+            go install "$module@$VERSION"
+          [[ "$("$install_root/bin/pages" --version)" == "pages $VERSION" ]]
+
+          printf '<!doctype html><title>Tagged release</title>\n' > "$install_root/page.html"
+          "$install_root/bin/pages" publish \
+            --file "$install_root/page.html" \
+            --slug release-check \
+            --dest "$install_root/public"
+          cmp "$install_root/page.html" \
+            "$install_root/public/release-check/index.html"
+
+      - name: Create GitHub release
+        run: >-
+          gh release create "$VERSION"
+          --verify-tag
+          --title "$VERSION"
+          --generate-notes
+
+      - name: Verify GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          endpoint="repos/$GITHUB_REPOSITORY/releases/tags/$VERSION"
+          [[ "$(gh api "$endpoint" --jq '.tag_name')" == "$VERSION" ]]
+          [[ "$(gh api "$endpoint" --jq '.draft')" == "false" ]]
+          [[ "$(gh api "$endpoint" --jq '.prerelease')" == "false" ]]
+          echo "released $VERSION at $GITHUB_SHA"
+          gh api "$endpoint" --jq '.html_url'
