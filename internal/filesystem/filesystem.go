@@ -26,6 +26,7 @@ type FS interface {
 	WriteFile(string, []byte, fs.FileMode) error
 	Stat(string) (fs.FileInfo, error)
 	Lstat(string) (fs.FileInfo, error)
+	Chmod(string, fs.FileMode) error
 	MkdirAll(string, fs.FileMode) error
 	MkdirTemp(string, string) (string, error)
 	CreateTemp(string, string) (File, error)

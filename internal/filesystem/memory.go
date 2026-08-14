@@ -130,6 +130,18 @@ func (memory *Memory) WriteFile(path string, data []byte, mode fs.FileMode) erro
 func (memory *Memory) Stat(path string) (fs.FileInfo, error)  { return memory.stat("stat", path) }
 func (memory *Memory) Lstat(path string) (fs.FileInfo, error) { return memory.stat("lstat", path) }
 
+func (memory *Memory) Chmod(path string, mode fs.FileMode) error {
+	path = memory.clean(path)
+	memory.mu.Lock()
+	defer memory.mu.Unlock()
+	node, found := memory.nodes[path]
+	if !found {
+		return pathError("chmod", path, fs.ErrNotExist)
+	}
+	node.mode = node.mode.Type() | mode.Perm()
+	return nil
+}
+
 func (memory *Memory) stat(operation, path string) (fs.FileInfo, error) {
 	path = memory.clean(path)
 	memory.mu.RLock()
@@ -450,14 +462,7 @@ func (file *memoryFile) Close() error {
 
 func (file *memoryFile) Stat() (fs.FileInfo, error) { return file.memory.Stat(file.path) }
 func (file *memoryFile) Chmod(mode fs.FileMode) error {
-	file.memory.mu.Lock()
-	defer file.memory.mu.Unlock()
-	node, found := file.memory.nodes[file.path]
-	if !found {
-		return fs.ErrNotExist
-	}
-	node.mode = node.mode.Type() | mode.Perm()
-	return nil
+	return file.memory.Chmod(file.path, mode)
 }
 func (file *memoryFile) Name() string { return file.path }
 

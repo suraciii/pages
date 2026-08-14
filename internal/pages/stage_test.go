@@ -21,6 +21,21 @@ func newMemoryStager(t *testing.T) (*Stager, *filesystem.Memory, string) {
 	return stager, fileSystem, publicRoot
 }
 
+func TestNewStagerMakesPublicRootReadableAndStagingPrivate(t *testing.T) {
+	fileSystem := filesystem.NewMemory("/workspace")
+	publicRoot := "/public"
+	if err := fileSystem.MkdirAll(publicRoot, 0o700); err != nil {
+		t.Fatalf("create existing public root: %v", err)
+	}
+	if _, err := NewStager(publicRoot, fileSystem); err != nil {
+		t.Fatalf("new stager: %v", err)
+	}
+
+	assertMode(t, fileSystem, publicRoot, 0o755)
+	assertMode(t, fileSystem, filepath.Join(publicRoot, ".pages"), 0o700)
+	assertMode(t, fileSystem, filepath.Join(publicRoot, ".pages", "staging"), 0o700)
+}
+
 func TestStagerRecoveryRestoresDisplacedVersion(t *testing.T) {
 	stager, fileSystem, publicRoot := newMemoryStager(t)
 	oldDir := filepath.Join(publicRoot, ".pages", "staging", "@bumble", "old-deadbeef-report")
@@ -77,12 +92,17 @@ func TestStagerRecoveryRemovesInvalidIdentityDir(t *testing.T) {
 
 func TestStagerSwapHTMLFirstPublishAndReplace(t *testing.T) {
 	stager, fileSystem, publicRoot := newMemoryStager(t)
+	if err := fileSystem.MkdirAll(filepath.Join(publicRoot, "@bumble"), 0o700); err != nil {
+		t.Fatalf("create existing identity directory: %v", err)
+	}
 	for _, content := range []string{"first", "second"} {
 		if err := stager.SwapHTML("bumble", "hello", stageHTML(t, stager, content)); err != nil {
 			t.Fatalf("swap: %v", err)
 		}
 	}
 	assertPageContent(t, fileSystem, publicRoot, "bumble", "hello", "second")
+	assertMode(t, fileSystem, filepath.Join(publicRoot, "@bumble"), 0o755)
+	assertMode(t, fileSystem, filepath.Join(publicRoot, "@bumble", "hello"), 0o755)
 	assertStagingEmpty(t, fileSystem, publicRoot)
 }
 
@@ -212,6 +232,17 @@ func mustWriteMemoryFile(t *testing.T, fileSystem filesystem.FS, path, content s
 	}
 	if err := fileSystem.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
+	}
+}
+
+func assertMode(t *testing.T, fileSystem filesystem.FS, path string, want fs.FileMode) {
+	t.Helper()
+	info, err := fileSystem.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %q: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("mode %q = %o, want %o", path, got, want)
 	}
 }
 

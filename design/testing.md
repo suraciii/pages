@@ -31,7 +31,8 @@ start a process, or use an external service.
   are unchanged.
 - Swap tests cover: first publish, replace of a directory page, the
   replacement of a zip Page with a single-file Page, the brief-absence window
-  is not asserted but the end state is, and startup recovery restores
+  is not asserted but the end state is, Public Root and final Page directories
+  use mode `0755` while `.pages/` uses mode `0700`, and startup recovery restores
   `old-<rand>-<slug>` under the Default or Named Identity staging scope when
   the target is missing and clears other staging leftovers. Recovery must
   preserve a displaced Page when it cannot inspect the target.
