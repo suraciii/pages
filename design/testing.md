@@ -53,7 +53,8 @@ start a process, or use an external service.
   defaults remain available without test-only global setters.
 - CLI tests inject stdout, stderr, the environment, the working directory, and
   user config directory discovery. They cover root command dispatch and the
-  minimal local publish command without a Destination.
+  minimal local publish command without a Destination. The root version test
+  injects a fixed build version and asserts the exact stdout contract.
 - Skill command tests capture stdout and stderr in memory. They prove that the
   embedded output is a complete skill, help does not print the skill, invalid
   arguments are usage errors, and no process capability is consulted.

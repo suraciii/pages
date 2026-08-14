@@ -23,6 +23,12 @@ go install github.com/suraciii/pages@latest
 
 Make sure Go's binary install directory is on your `PATH`.
 
+Check the installed version:
+
+```text literal
+pages --version
+```
+
 ## TL;DR
 
 Create one Page file:

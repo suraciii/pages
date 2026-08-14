@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"runtime/debug"
 
 	"github.com/suraciii/pages/internal/filesystem"
 	"github.com/suraciii/pages/internal/publish"
@@ -17,8 +18,9 @@ type commandRuntime struct {
 	httpClient       interface {
 		Do(*http.Request) (*http.Response, error)
 	}
-	stdout io.Writer
-	stderr io.Writer
+	stdout  io.Writer
+	stderr  io.Writer
+	version string
 }
 
 func productionCommandRuntime() commandRuntime {
@@ -29,7 +31,16 @@ func productionCommandRuntime() commandRuntime {
 		currentDirectory: os.Getwd,
 		stdout:           os.Stdout,
 		stderr:           os.Stderr,
+		version:          buildVersion(),
 	}
+}
+
+func buildVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Version == "" {
+		return "(devel)"
+	}
+	return info.Main.Version
 }
 
 func (runtime commandRuntime) publishRuntime() publish.Runtime {

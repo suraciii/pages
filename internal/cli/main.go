@@ -17,6 +17,13 @@ func run(args []string, runtime commandRuntime) int {
 	case "--help", "-h":
 		printUsage(runtime.stdout)
 		return 0
+	case "--version":
+		if len(args) != 1 {
+			fmt.Fprintln(runtime.stderr, "pages --version: arguments are not allowed")
+			return 2
+		}
+		fmt.Fprintf(runtime.stdout, "pages %s\n", runtime.version)
+		return 0
 	case "serve":
 		return runServe(args[1:], runtime)
 	case "publish":

@@ -39,6 +39,7 @@ func newTestCommand() *testCommand {
 			currentDirectory: func() (string, error) { return workDir, nil },
 			stdout:           stdout,
 			stderr:           stderr,
+			version:          "v1.2.3",
 		},
 		fileSystem:  fileSystem,
 		environment: environment,
