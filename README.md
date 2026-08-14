@@ -21,6 +21,12 @@ Install the binary with the Go toolchain:
 go install github.com/suraciii/pages@latest
 ```
 
+For a reproducible install, use an exact release tag:
+
+```text literal
+go install github.com/suraciii/pages@v0.0.1
+```
+
 Make sure Go's binary install directory is on your `PATH`.
 
 Check the installed version:
@@ -165,10 +171,12 @@ go build -o dist/pages .
 
 ## Docker
 
-Build the included [Dockerfile](Dockerfile):
+pages does not publish an official container image. Check out the release tag
+and build the included [Dockerfile](Dockerfile):
 
 ```text literal
-docker build -t pages:local .
+git checkout v0.0.1
+docker build -t pages:0.0.1 .
 ```
 
 See [Deployment](docs/deployment.md) for a complete runtime configuration.

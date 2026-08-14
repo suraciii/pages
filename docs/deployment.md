@@ -77,13 +77,19 @@ private to the host.
 
 ### Option B: Docker
 
+The project does not publish an official container image. Build the image from
+the release tag before you run it. The repository root contains the
+Dockerfile.
+
 ```text literal
+git checkout v0.0.1
+docker build -t pages:0.0.1 .
 docker run \
   -v /srv/pages:/srv/pages \
   -v /etc/pages/tokens.json:/run/secrets/pages_tokens:ro \
   -p 127.0.0.1:3103:3103 \
   --user "$(id -u pages):$(id -g pages)" \
-  pages:local
+  pages:0.0.1
 ```
 
 The write port is published on the host loopback only. The health probe is

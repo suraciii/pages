@@ -25,12 +25,13 @@ truth for what is done and what is next.
 - `pages skill` prints version-matched agent instructions. The distributed
   skill is a stable bootstrap that finds or installs the CLI.
 - The Go module is `github.com/suraciii/pages`.
+- The public static-host contract is validated with Caddy: final Page
+  directories are readable by a separate non-root process, `/.pages/*` is
+  blocked, and the reference security headers prevent script execution.
 
 ## Next
 
-- A public deployment with the host contract in
-  [design/deployment.md](design/deployment.md): the internal-path block
-  and the asset CSP.
+No next product milestone is committed.
 
 ## Not planned
 
