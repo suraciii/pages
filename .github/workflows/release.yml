@@ -46,10 +46,40 @@ jobs:
             echo "checkout does not identify the dispatched commit" >&2
             exit 1
           fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
-            echo "tag already exists: $VERSION" >&2
-            exit 1
+
+          git fetch --quiet origin main --tags
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          tag_ref="refs/tags/$VERSION"
+          peeled_ref="refs/tags/$VERSION^{}"
+          remote_refs="$(git ls-remote --tags origin "$tag_ref" "$peeled_ref")"
+          tag_object="$(awk -v ref="$tag_ref" '$2 == ref { print $1 }' <<< "$remote_refs")"
+          peeled_commit="$(awk -v ref="$peeled_ref" '$2 == ref { print $1 }' <<< "$remote_refs")"
+
+          if [[ -z "$tag_object" ]]; then
+            candidate_sha="$GITHUB_SHA"
+            tag_exists=false
+            if [[ "$main_sha" != "$candidate_sha" ]]; then
+              echo "the dispatched commit is no longer origin/main" >&2
+              exit 1
+            fi
+          else
+            tag_exists=true
+            if [[ -z "$peeled_commit" ]] || \
+               [[ "$(git cat-file -t "$tag_object")" != "tag" ]] || \
+               [[ "$(git rev-parse "$tag_ref")" != "$tag_object" ]]; then
+              echo "existing tag is not the expected annotated tag: $VERSION" >&2
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$peeled_commit" "$main_sha"; then
+              echo "existing tag does not belong to the current main history" >&2
+              exit 1
+            fi
+            candidate_sha="$peeled_commit"
           fi
+
+          git checkout --quiet --detach "$candidate_sha"
+          echo "CANDIDATE_SHA=$candidate_sha" >> "$GITHUB_ENV"
+          echo "TAG_EXISTS=$tag_exists" >> "$GITHUB_ENV"
 
       - uses: actions/setup-go@v7
         with:
@@ -93,16 +123,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          git fetch --quiet origin main
-          if [[ "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
-            echo "origin/main changed during release validation" >&2
-            exit 1
-          fi
+          if [[ "$TAG_EXISTS" == "true" ]]; then
+            echo "using existing tag $VERSION"
+          else
+            git fetch --quiet origin main
+            if [[ "$(git rev-parse refs/remotes/origin/main)" != "$CANDIDATE_SHA" ]]; then
+              echo "origin/main changed during release validation" >&2
+              exit 1
+            fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag --annotate "$VERSION" "$GITHUB_SHA" --message "pages $VERSION"
-          git push origin "refs/tags/$VERSION"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag --annotate "$VERSION" "$CANDIDATE_SHA" --message "pages $VERSION"
+            git push origin "refs/tags/$VERSION"
+          fi
 
       - name: Verify remote tag
         shell: bash
@@ -117,7 +151,7 @@ jobs:
           tag_object="$(awk -v ref="$tag_ref" '$2 == ref { print $1 }' <<< "$remote_refs")"
           peeled_commit="$(awk -v ref="$peeled_ref" '$2 == ref { print $1 }' <<< "$remote_refs")"
           [[ -n "$tag_object" ]]
-          [[ "$peeled_commit" == "$GITHUB_SHA" ]]
+          [[ "$peeled_commit" == "$CANDIDATE_SHA" ]]
           [[ "$tag_object" != "$peeled_commit" ]]
 
       - name: Check exact-tag install
@@ -143,11 +177,17 @@ jobs:
             "$install_root/public/release-check/index.html"
 
       - name: Create GitHub release
-        run: >-
-          gh release create "$VERSION"
-          --verify-tag
-          --title "$VERSION"
-          --generate-notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "using existing GitHub release $VERSION"
+          else
+            gh release create "$VERSION" \
+              --verify-tag \
+              --title "$VERSION" \
+              --generate-notes
+          fi
 
       - name: Verify GitHub release
         shell: bash
@@ -158,5 +198,5 @@ jobs:
           [[ "$(gh api "$endpoint" --jq '.tag_name')" == "$VERSION" ]]
           [[ "$(gh api "$endpoint" --jq '.draft')" == "false" ]]
           [[ "$(gh api "$endpoint" --jq '.prerelease')" == "false" ]]
-          echo "released $VERSION at $GITHUB_SHA"
+          echo "released $VERSION at $CANDIDATE_SHA"
           gh api "$endpoint" --jq '.html_url'

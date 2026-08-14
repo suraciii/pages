@@ -28,6 +28,10 @@ explicit approval to publish that version from the captured `main` commit. The
 approval confirms that the manual deployment acceptance and document review
 are complete. A push or pull request must not publish a release.
 
+The workflow is resumable. A repeated dispatch for the same version may
+continue from an existing annotated tag or verify an existing GitHub release.
+It must not move or replace a tag.
+
 ## Semantics
 
 ### Candidate
@@ -35,9 +39,11 @@ are complete. A push or pull request must not publish a release.
 Before a tag is created, all of these conditions must hold for one commit on
 `main`:
 
-- The workflow was dispatched from `main`, and the captured commit still
-  identifies `origin/main` before the tag is created.
-- The requested version is valid, and its tag does not exist.
+- The workflow was dispatched from `main`.
+- For a new tag, the captured commit still identifies `origin/main` before the
+  tag is created. For a resumed release, the existing tag is annotated and its
+  peeled commit belongs to the current `main` history.
+- The requested version is valid.
 - The required GitHub checks pass for that commit.
 - `make ci` and `go test -race -count=1 ./...` pass.
 - The CLI builds for Linux, macOS, and Windows on `amd64` and `arm64`.
@@ -63,13 +69,15 @@ loopback services. It is separate from the hermetic test suite in
    gh workflow run release.yml --ref main -f version=v0.0.1
    ```
 
-3. Validate the request and run the deterministic candidate conditions before
-   the workflow creates public state.
-4. Create and push an annotated tag for the captured commit.
-5. Verify the remote tag object and its peeled commit.
+3. Validate the request. If the tag does not exist, use the captured `main`
+   commit as the candidate. If the tag exists, validate it and use its peeled
+   commit as the candidate.
+4. Run the deterministic candidate conditions.
+5. Create and push an annotated tag when it does not exist, then verify the
+   remote tag object and its peeled commit.
 6. In an isolated install directory, install the exact tag with `go install`,
    run `pages --version`, and perform a minimal local Publish.
-7. Create the GitHub release from the existing tag. Do not attach binaries or
+7. Create the GitHub release when it does not exist. Do not attach binaries or
    container images.
 8. Read the published release and tag back from GitHub and record their exact
    identifiers.
@@ -82,8 +90,10 @@ semantic version already identifies it as initial development software.
 A failed condition before the tag is pushed stops the release without creating
 public state. Fix the cause and validate a new exact candidate.
 
-A pushed tag must not be moved or deleted. If exact-tag verification fails, the
-workflow must not create the GitHub release. Fix the defect in a new version.
+A pushed tag must not be moved or deleted. A repeated dispatch resumes from a
+valid existing tag or verifies an existing release. If the tagged source fails
+product validation, the workflow must not create the GitHub release. Fix that
+defect in a new version.
 
 ## Status
 
