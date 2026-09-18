@@ -80,6 +80,7 @@ func runServe(args []string, runtime commandRuntime) int {
 		fmt.Fprintf(runtime.stderr, "pages serve: %v\n", err)
 		return 1
 	}
+
 	httpServer := &http.Server{
 		Addr:              *listenAddress,
 		Handler:           server,
