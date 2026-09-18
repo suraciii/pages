@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/suraciii/pages/internal/filesystem"
 )
@@ -14,6 +15,8 @@ func TestRefreshIndexesListsPagesAndIdentities(t *testing.T) {
 	stager, fileSystem, publicRoot := newMemoryStager(t)
 	publishStagedHTML(t, stager, "", "status", "status")
 	publishStagedHTML(t, stager, "", "report", "report")
+	publishStagedHTML(t, stager, "zeta", "overview", "overview")
+	publishStagedHTML(t, stager, "default", "overview", "overview")
 	publishStagedHTML(t, stager, "bumble", "overview", "overview")
 
 	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
@@ -21,7 +24,11 @@ func TestRefreshIndexesListsPagesAndIdentities(t *testing.T) {
 	}
 
 	root := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
-	assertContainsInOrder(t, root, `href="./report/"`, `href="./status/"`, `href="./@bumble/"`)
+	assertContainsInOrder(t, root, "<h2>Default Identity</h2>", `href="./report/"`, `href="./status/"`,
+		"<h2>Named Identities</h2>", `href="./@bumble/"`, `href="./@default/"`, `href="./@zeta/"`)
+	if strings.Contains(root, `href="./default/"`) {
+		t.Fatalf("default identity added a URL scope: %s", root)
+	}
 	if strings.Contains(root, ".pages") || strings.Contains(root, "overview") {
 		t.Fatalf("root index leaked internal or nested entries: %s", root)
 	}
@@ -32,13 +39,61 @@ func TestRefreshIndexesListsPagesAndIdentities(t *testing.T) {
 	}
 }
 
+func TestRefreshIndexesOrdersPagesByPublishedFileTime(t *testing.T) {
+	for _, scope := range []struct {
+		name     string
+		identity string
+	}{
+		{name: "default"},
+		{name: "named", identity: "bumble"},
+	} {
+		t.Run(scope.name, func(t *testing.T) {
+			stager, memory, publicRoot := newMemoryStager(t)
+			for _, slug := range []string{"alpha", "zeta", "beta"} {
+				publishStagedHTML(t, stager, scope.identity, slug, slug)
+			}
+			scopeDir := filepath.Join(publicRoot, IdentityScope(scope.identity))
+			alphaPath := filepath.Join(scopeDir, "alpha", "index.html")
+			fileSystem := catalogTimeFS{
+				FS: memory,
+				times: map[string]time.Time{
+					alphaPath: time.Unix(100, 0),
+					filepath.Join(scopeDir, "beta", "index.html"): time.Unix(200, 0),
+					filepath.Join(scopeDir, "zeta", "index.html"): time.Unix(200, 0),
+				},
+			}
+			if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+				t.Fatalf("refresh indexes: %v", err)
+			}
+			indexPath := filepath.Join(scopeDir, "index.html")
+			index := readCatalog(t, fileSystem, indexPath)
+			assertContainsInOrder(t, index, `href="./beta/"`, `href="./zeta/"`, `href="./alpha/"`)
+
+			if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+				t.Fatalf("refresh unchanged pages: %v", err)
+			}
+			if refreshed := readCatalog(t, fileSystem, indexPath); refreshed != index {
+				t.Fatalf("refresh changed index for unchanged pages: before=%q after=%q", index, refreshed)
+			}
+
+			publishStagedHTML(t, stager, scope.identity, "alpha", "updated alpha")
+			fileSystem.times[alphaPath] = time.Unix(300, 0)
+			if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+				t.Fatalf("refresh updated page: %v", err)
+			}
+			updated := readCatalog(t, fileSystem, indexPath)
+			assertContainsInOrder(t, updated, `href="./alpha/"`, `href="./beta/"`, `href="./zeta/"`)
+		})
+	}
+}
+
 func TestRefreshIndexesRendersEmptyScope(t *testing.T) {
 	_, fileSystem, publicRoot := newMemoryStager(t)
 	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
 		t.Fatalf("refresh indexes: %v", err)
 	}
 	root := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
-	if !strings.Contains(root, "No Pages published yet.") {
+	if !strings.Contains(root, "<h2>Default Identity</h2>") || !strings.Contains(root, "No Pages published yet.") {
 		t.Fatalf("empty root index = %s", root)
 	}
 }
@@ -142,6 +197,29 @@ func TestServerRefreshesPageIndexAfterUpload(t *testing.T) {
 		t.Fatalf("root index = %s", root)
 	}
 }
+
+type catalogTimeFS struct {
+	filesystem.FS
+	times map[string]time.Time
+}
+
+func (fileSystem catalogTimeFS) Stat(path string) (fs.FileInfo, error) {
+	info, err := fileSystem.FS.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if modTime, found := fileSystem.times[path]; found {
+		return catalogTimeInfo{FileInfo: info, modTime: modTime}, nil
+	}
+	return info, nil
+}
+
+type catalogTimeInfo struct {
+	fs.FileInfo
+	modTime time.Time
+}
+
+func (info catalogTimeInfo) ModTime() time.Time { return info.modTime }
 
 func readCatalog(t *testing.T, fileSystem filesystem.FS, path string) string {
 	t.Helper()

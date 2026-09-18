@@ -24,9 +24,9 @@ The root Index is `<public-root>/index.html`. A Named Identity Index is
 `<public-root>/<slug>/index.html` or
 `<public-root>/@<identity>/<slug>/index.html`.
 
-The Default Identity has no separate directory. Its Pages are listed in the
-root Index. A root Index may list Named Identity directories as navigation
-entries.
+The Default Identity has no separate directory. Its Pages are listed under
+`Default Identity` in the root Index. A root Index may list Named Identity
+directories under `Named Identities` as navigation entries.
 
 ## Semantics
 
@@ -41,8 +41,15 @@ lists the valid Page directories below it.
 Invalid or incomplete entries are ignored. The scanner never follows a Page's
 child directories while building an Index.
 
-Entries are sorted by their display name. Links are relative to the Index
-location and end in `/`. Names are HTML-escaped before they are written.
+Pages are sorted by their root `index.html` modification time, newest first,
+then by Slug when times are equal. Both HTML and zip Publish write a new
+`index.html`; neither preserves source timestamps. This file time is the
+publication ordering basis, not a record of the exact Page swap time. It also
+orders existing Pages without a migration or publication manifest. Named
+Identity entries are sorted by name.
+
+Links are relative to the Index location and end in `/`. Names are HTML-escaped
+before they are written.
 
 The generated document is plain HTML with a small inline style. It contains
 no script, external resource, user-provided title, timestamp, or metadata.

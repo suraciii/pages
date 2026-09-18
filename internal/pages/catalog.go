@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/suraciii/pages/internal/filesystem"
 )
@@ -22,7 +23,12 @@ const (
 
 type catalogScope struct {
 	identity string
-	pages    []string
+	pages    []catalogPage
+}
+
+type catalogPage struct {
+	slug    string
+	modTime time.Time
 }
 
 type catalogTarget struct {
@@ -84,7 +90,7 @@ func scanCatalogScopes(publicRoot string, fileSystem filesystem.FS) ([]catalogSc
 	if err != nil {
 		return nil, fmt.Errorf("scan public root: %w", err)
 	}
-	rootPages := make([]string, 0)
+	rootPages := make([]catalogPage, 0)
 	identities := make([]string, 0)
 	for _, entry := range entries {
 		name := entry.Name()
@@ -98,11 +104,13 @@ func scanCatalogScopes(publicRoot string, fileSystem filesystem.FS) ([]catalogSc
 			}
 			continue
 		}
-		if ValidName(name) && isPageDir(filepath.Join(publicRoot, name), fileSystem) {
-			rootPages = append(rootPages, name)
+		if ValidName(name) {
+			if page, ok := scanCatalogPage(publicRoot, name, fileSystem); ok {
+				rootPages = append(rootPages, page)
+			}
 		}
 	}
-	sort.Strings(rootPages)
+	sortCatalogPages(rootPages)
 	sort.Strings(identities)
 
 	scopes := make([]catalogScope, 0, len(identities)+1)
@@ -117,29 +125,41 @@ func scanCatalogScopes(publicRoot string, fileSystem filesystem.FS) ([]catalogSc
 	return scopes, nil
 }
 
-func scanIdentityPages(publicRoot, identity string, fileSystem filesystem.FS) ([]string, error) {
+func scanIdentityPages(publicRoot, identity string, fileSystem filesystem.FS) ([]catalogPage, error) {
 	identityDir := filepath.Join(publicRoot, IdentityScope(identity))
 	entries, err := fileSystem.ReadDir(identityDir)
 	if err != nil {
 		return nil, fmt.Errorf("scan identity %q: %w", identity, err)
 	}
-	pages := make([]string, 0)
+	pages := make([]catalogPage, 0)
 	for _, entry := range entries {
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") || !entry.IsDir() || !ValidName(name) {
 			continue
 		}
-		if isPageDir(filepath.Join(identityDir, name), fileSystem) {
-			pages = append(pages, name)
+		if page, ok := scanCatalogPage(identityDir, name, fileSystem); ok {
+			pages = append(pages, page)
 		}
 	}
-	sort.Strings(pages)
+	sortCatalogPages(pages)
 	return pages, nil
 }
 
-func isPageDir(path string, fileSystem filesystem.FS) bool {
-	info, err := fileSystem.Stat(filepath.Join(path, "index.html"))
-	return err == nil && info.Mode().IsRegular()
+func scanCatalogPage(scopeDir, slug string, fileSystem filesystem.FS) (catalogPage, bool) {
+	info, err := fileSystem.Stat(filepath.Join(scopeDir, slug, "index.html"))
+	if err != nil || !info.Mode().IsRegular() {
+		return catalogPage{}, false
+	}
+	return catalogPage{slug: slug, modTime: info.ModTime()}, true
+}
+
+func sortCatalogPages(pages []catalogPage) {
+	sort.Slice(pages, func(left, right int) bool {
+		if pages[left].modTime.Equal(pages[right].modTime) {
+			return pages[left].slug < pages[right].slug
+		}
+		return pages[left].modTime.After(pages[right].modTime)
+	})
 }
 
 func makeCatalogTargets(publicRoot string, scopes []catalogScope) []catalogTarget {
@@ -162,12 +182,12 @@ func makeCatalogTargets(publicRoot string, scopes []catalogScope) []catalogTarge
 	return targets
 }
 
-func renderRootIndex(pages []string, identities []catalogScope) []byte {
+func renderRootIndex(pages []catalogPage, identities []catalogScope) []byte {
 	var body bytes.Buffer
 	writeDocumentStart(&body, "Pages", "Pages")
-	writePageList(&body, "Pages", pages, "./")
+	writePageList(&body, "Default Identity", pages, "./")
 	if len(identities) > 0 {
-		body.WriteString("<section>\n<h2>Identities</h2>\n<ul>\n")
+		body.WriteString("<section>\n<h2>Named Identities</h2>\n<ul>\n")
 		for _, identity := range identities {
 			name := "@" + identity.identity + "/"
 			writeListItem(&body, name, "Identity", "./"+IdentityScope(identity.identity)+"/")
@@ -178,7 +198,7 @@ func renderRootIndex(pages []string, identities []catalogScope) []byte {
 	return body.Bytes()
 }
 
-func renderIdentityIndex(identity string, pages []string) []byte {
+func renderIdentityIndex(identity string, pages []catalogPage) []byte {
 	var body bytes.Buffer
 	title := "Pages / @" + identity
 	writeDocumentStart(&body, title, title)
@@ -224,7 +244,7 @@ func writeDocumentEnd(body *bytes.Buffer) {
 	body.WriteString("</main>\n</body>\n</html>\n")
 }
 
-func writePageList(body *bytes.Buffer, heading string, pages []string, prefix string) {
+func writePageList(body *bytes.Buffer, heading string, pages []catalogPage, prefix string) {
 	body.WriteString("<section>\n<h2>")
 	body.WriteString(html.EscapeString(heading))
 	body.WriteString("</h2>\n")
@@ -234,7 +254,7 @@ func writePageList(body *bytes.Buffer, heading string, pages []string, prefix st
 	}
 	body.WriteString("<ul>\n")
 	for _, page := range pages {
-		writeListItem(body, page+"/", "Page", prefix+page+"/")
+		writeListItem(body, page.slug+"/", "Page", prefix+page.slug+"/")
 	}
 	body.WriteString("</ul>\n</section>\n")
 }

@@ -12,10 +12,12 @@ Page Index at `/@<identity>/`. Each Index links to the current Page roots:
 ```text literal
 Pages
 
+Default Identity
+
 report/       Page       /report/
 status/       Page       /status/
 
-Identities
+Named Identities
 
 @bumble/      Identity   /@bumble/
 ```
@@ -26,8 +28,13 @@ Index does not list files inside a Page.
 
 ## Rules
 
-- The Default Identity stays unnamed in the URL.
-- Page and Identity entries use deterministic lexicographic order.
+- Pages without a Named Identity belong to the Default Identity. The root
+  Index labels their group `Default Identity`; their URLs stay unscoped.
+- Pages appear from newest to oldest, using the published `index.html`
+  modification time. Publishing again moves a Page according to its new
+  time. Equal times use Slug order. Existing Pages use their current file
+  times.
+- Named Identity entries use lexicographic order.
 - The Index uses relative links so a URL path prefix remains valid.
 - An empty Index states that no Page is published in that scope.
 - The Index contains no scripts, external assets, timestamps, versions, tags,
