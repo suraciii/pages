@@ -47,7 +47,8 @@ start a process, or use an external service.
 - Page Index tests cover the Default Identity label, newest-first Page order,
   Slug order for equal file times, Named Identity order, empty scopes, ignored
   invalid or incomplete entries, relative links, startup recovery of
-  interrupted Index replacement, and refresh after local and server Publish.
+  interrupted Index replacement, shared Identity navigation on every Index,
+  current-scope links, and refresh after local and server Publish.
   File times are supplied by an in-memory file-system test dependency.
 - Size limits must stay configurable through `ServerConfig` so tests do not
   wait on real time or allocate large resources.

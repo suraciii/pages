@@ -28,9 +28,10 @@ The Default Identity has no separate directory. Its Pages are listed under
 `Default Identity` in the root Index. A root Index may list Named Identity
 directories in its Identity navigation block.
 
-When Named Identities exist, the root Index renders an Identity navigation
-block first. It lists the Default Identity first, then Named Identity entries.
-The Default Identity Page list follows this block, so scope navigation stays
+When Named Identities exist, every Index renders the same Identity navigation
+block first. It lists the Default Identity first, then Named Identity entries;
+the current scope links to itself and other entries use relative URLs. The
+root Default Identity Page list follows this block, so scope navigation stays
 visible when the Default Identity contains many Pages.
 
 ## Semantics

@@ -164,19 +164,20 @@ func sortCatalogPages(pages []catalogPage) {
 
 func makeCatalogTargets(publicRoot string, scopes []catalogScope) []catalogTarget {
 	targets := make([]catalogTarget, 0, len(scopes))
+	identities := scopes[1:]
 	for _, scope := range scopes {
 		if scope.identity == "" {
 			targets = append(targets, catalogTarget{
 				key:     "root",
 				path:    filepath.Join(publicRoot, "index.html"),
-				content: renderRootIndex(scope.pages, scopes[1:]),
+				content: renderRootIndex(scope.pages, identities),
 			})
 			continue
 		}
 		targets = append(targets, catalogTarget{
 			key:     "identity-" + scope.identity,
 			path:    filepath.Join(publicRoot, IdentityScope(scope.identity), "index.html"),
-			content: renderIdentityIndex(scope.identity, scope.pages),
+			content: renderIdentityIndex(scope.identity, scope.pages, identities),
 		})
 	}
 	return targets
@@ -186,29 +187,53 @@ func renderRootIndex(pages []catalogPage, identities []catalogScope) []byte {
 	var body bytes.Buffer
 	writeDocumentStart(&body, "Pages", "Pages")
 	if len(identities) > 0 {
-		body.WriteString("<nav aria-label=\"Identity navigation\"><ul>\n")
-		writeListItem(&body, "Default Identity", "Current", "./")
-		for _, identity := range identities {
-			name := "@" + identity.identity + "/"
-			writeListItem(&body, name, "Named Identity", "./"+IdentityScope(identity.identity)+"/")
-		}
-		body.WriteString("</ul></nav>\n")
+		writeIdentityNavigation(&body, "", identities)
 	}
 	writePageList(&body, "Default Identity", pages, "./")
 	writeDocumentEnd(&body)
 	return body.Bytes()
 }
 
-func renderIdentityIndex(identity string, pages []catalogPage) []byte {
+func renderIdentityIndex(identity string, pages []catalogPage, identities []catalogScope) []byte {
 	var body bytes.Buffer
 	title := "Pages / @" + identity
 	writeDocumentStart(&body, title, title)
+	if len(identities) > 0 {
+		writeIdentityNavigation(&body, identity, identities)
+	}
 	body.WriteString("<nav aria-label=\"Breadcrumb\"><a href=\"../\">Pages</a> / @")
 	body.WriteString(html.EscapeString(identity))
 	body.WriteString("</nav>\n")
 	writePageList(&body, "Pages", pages, "./")
 	writeDocumentEnd(&body)
 	return body.Bytes()
+}
+
+func writeIdentityNavigation(body *bytes.Buffer, currentIdentity string, identities []catalogScope) {
+	body.WriteString("<nav aria-label=\"Identity navigation\"><ul>\n")
+	defaultHref := "./"
+	if currentIdentity != "" {
+		defaultHref = "../"
+	}
+	defaultKind := "Default Identity"
+	if currentIdentity == "" {
+		defaultKind = "Current"
+	}
+	writeListItem(body, "Default Identity", defaultKind, defaultHref)
+	for _, identity := range identities {
+		name := "@" + identity.identity + "/"
+		href := "./" + IdentityScope(identity.identity) + "/"
+		if currentIdentity != "" {
+			href = "../" + IdentityScope(identity.identity) + "/"
+		}
+		kind := "Named Identity"
+		if identity.identity == currentIdentity {
+			href = "./"
+			kind = "Current"
+		}
+		writeListItem(body, name, kind, href)
+	}
+	body.WriteString("</ul></nav>\n")
 }
 
 func writeDocumentStart(body *bytes.Buffer, title, heading string) {

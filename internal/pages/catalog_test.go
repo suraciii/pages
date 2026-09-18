@@ -34,9 +34,16 @@ func TestRefreshIndexesListsPagesAndIdentities(t *testing.T) {
 	}
 
 	identity := readCatalog(t, fileSystem, filepath.Join(publicRoot, "@bumble", "index.html"))
-	if !strings.Contains(identity, `href="../"`) || !strings.Contains(identity, `href="./overview/"`) {
-		t.Fatalf("identity index links = %s", identity)
-	}
+	assertContainsInOrder(t, identity,
+		`<nav aria-label="Identity navigation">`,
+		`href="../">Default Identity</a>`,
+		`href="./">@bumble/</a>`,
+		`href="../@default/">@default/</a>`,
+		`href="../@zeta/">@zeta/</a>`,
+		`<nav aria-label="Breadcrumb">`,
+		`href="../">Pages</a>`,
+		`<h2>Pages</h2>`,
+		`href="./overview/"`)
 }
 
 func TestRefreshIndexesOrdersPagesByPublishedFileTime(t *testing.T) {

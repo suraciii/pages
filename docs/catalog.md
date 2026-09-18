@@ -7,12 +7,11 @@ without adding a read API, a database, or publication history.
 ## Visible behavior
 
 The Public Root serves a Page Index at `/`. A Named Identity serves its own
-Page Index at `/@<identity>/`. Each Index links to the current Page roots:
+Page Index at `/@<identity>/`. Each Index links to the current Page roots and,
+when Named Identities exist, provides the same Identity navigation:
 
 ```text literal
 Pages
-
-Identity navigation
 
 Default Identity   Current   /
 @bumble/           Named Identity   /@bumble/
@@ -23,8 +22,9 @@ report/       Page       /report/
 status/       Page       /status/
 ```
 
-An Identity Index lists only the Pages in that Identity and includes a link to
-its parent Index. A Page link opens the Page at its trailing-slash URL. The
+An Identity Index lists only the Pages in that Identity and includes the
+Identity navigation plus a link to its parent Index. The current Identity is
+marked `Current`. A Page link opens the Page at its trailing-slash URL. The
 Index does not list files inside a Page.
 
 ## Rules
@@ -35,6 +35,8 @@ Index does not list files inside a Page.
   block first. Default Identity is the first entry and links to `/`; Named
   Identity entries follow. The Default Identity Page list comes after this
   block, so scope navigation stays visible when it has many Pages.
+- Every Identity Index uses the same navigation. Its current Identity links to
+  itself, and links to other scopes use relative URLs.
 - Pages appear from newest to oldest, using the published `index.html`
   modification time. Publishing again moves a Page according to its new
   time. Equal times use Slug order. Existing Pages use their current file
