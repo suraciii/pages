@@ -24,8 +24,8 @@ func TestRefreshIndexesListsPagesAndIdentities(t *testing.T) {
 	}
 
 	root := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
-	assertContainsInOrder(t, root, "<h2>Default Identity</h2>", `href="./report/"`, `href="./status/"`,
-		"<h2>Named Identities</h2>", `href="./@bumble/"`, `href="./@default/"`, `href="./@zeta/"`)
+	assertContainsInOrder(t, root, "<h2>Named Identities</h2>", `href="./@bumble/"`, `href="./@default/"`, `href="./@zeta/"`,
+		"<h2>Default Identity</h2>", `href="./report/"`, `href="./status/"`)
 	if strings.Contains(root, `href="./default/"`) {
 		t.Fatalf("default identity added a URL scope: %s", root)
 	}

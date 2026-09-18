@@ -12,14 +12,14 @@ Page Index at `/@<identity>/`. Each Index links to the current Page roots:
 ```text literal
 Pages
 
+Named Identities
+
+@bumble/      Identity   /@bumble/
+
 Default Identity
 
 report/       Page       /report/
 status/       Page       /status/
-
-Named Identities
-
-@bumble/      Identity   /@bumble/
 ```
 
 An Identity Index lists only the Pages in that Identity and includes a link to
@@ -30,6 +30,9 @@ Index does not list files inside a Page.
 
 - Pages without a Named Identity belong to the Default Identity. The root
   Index labels their group `Default Identity`; their URLs stay unscoped.
+- The root Index shows Named Identity navigation before the Default Identity
+  Page list, so scope navigation stays visible when the default scope has many
+  Pages.
 - Pages appear from newest to oldest, using the published `index.html`
   modification time. Publishing again moves a Page according to its new
   time. Equal times use Slug order. Existing Pages use their current file

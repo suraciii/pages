@@ -28,6 +28,10 @@ The Default Identity has no separate directory. Its Pages are listed under
 `Default Identity` in the root Index. A root Index may list Named Identity
 directories under `Named Identities` as navigation entries.
 
+The root Index renders the `Named Identities` navigation before the Default
+Identity Page list. This keeps scope navigation visible when the Default
+Identity contains many Pages.
+
 ## Semantics
 
 ### Scan

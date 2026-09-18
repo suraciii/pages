@@ -185,7 +185,6 @@ func makeCatalogTargets(publicRoot string, scopes []catalogScope) []catalogTarge
 func renderRootIndex(pages []catalogPage, identities []catalogScope) []byte {
 	var body bytes.Buffer
 	writeDocumentStart(&body, "Pages", "Pages")
-	writePageList(&body, "Default Identity", pages, "./")
 	if len(identities) > 0 {
 		body.WriteString("<section>\n<h2>Named Identities</h2>\n<ul>\n")
 		for _, identity := range identities {
@@ -194,6 +193,7 @@ func renderRootIndex(pages []catalogPage, identities []catalogScope) []byte {
 		}
 		body.WriteString("</ul>\n</section>\n")
 	}
+	writePageList(&body, "Default Identity", pages, "./")
 	writeDocumentEnd(&body)
 	return body.Bytes()
 }
