@@ -23,6 +23,8 @@ section. The body is the spec; the Gap is the footnote.
   page: install, token, service, host, publish.
 - [publishing.md](publishing.md) — the publish contract: Upload shape, public
   address, rejection rules, and limits.
+- [catalog.md](catalog.md) — the Page Index shown at the Public Root and in
+  Named Identity scopes.
 - [configuration.md](configuration.md) — every configuration input: tokens
   file, serve flags, publish config file, and environment variables.
 - [deployment.md](deployment.md) — running the service: systemd, Docker,

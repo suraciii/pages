@@ -56,6 +56,12 @@ The directory that the static host serves. The server writes Pages under
 `@<identity>/<slug>/index.html` for a Named Identity.
 _Avoid_: webroot, docroot
 
+**Page Index**:
+A generated static navigation document at the Public Root or inside one
+Named Identity. It links to current Pages and Identity scopes. It is not a
+Page, an Upload target, or an access-control boundary.
+_Avoid_: catalog, directory listing
+
 **Staging Area**:
 The `.pages/` directory inside the Public Root. The server unpacks a new
 Page there and swaps it into place. Readers see the complete old Page or the
