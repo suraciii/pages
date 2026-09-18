@@ -186,12 +186,13 @@ func renderRootIndex(pages []catalogPage, identities []catalogScope) []byte {
 	var body bytes.Buffer
 	writeDocumentStart(&body, "Pages", "Pages")
 	if len(identities) > 0 {
-		body.WriteString("<section>\n<h2>Named Identities</h2>\n<ul>\n")
+		body.WriteString("<nav aria-label=\"Identity navigation\"><ul>\n")
+		writeListItem(&body, "Default Identity", "Current", "./")
 		for _, identity := range identities {
 			name := "@" + identity.identity + "/"
-			writeListItem(&body, name, "Identity", "./"+IdentityScope(identity.identity)+"/")
+			writeListItem(&body, name, "Named Identity", "./"+IdentityScope(identity.identity)+"/")
 		}
-		body.WriteString("</ul>\n</section>\n")
+		body.WriteString("</ul></nav>\n")
 	}
 	writePageList(&body, "Default Identity", pages, "./")
 	writeDocumentEnd(&body)

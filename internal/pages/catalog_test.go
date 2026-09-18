@@ -24,7 +24,7 @@ func TestRefreshIndexesListsPagesAndIdentities(t *testing.T) {
 	}
 
 	root := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
-	assertContainsInOrder(t, root, "<h2>Named Identities</h2>", `href="./@bumble/"`, `href="./@default/"`, `href="./@zeta/"`,
+	assertContainsInOrder(t, root, `<nav aria-label="Identity navigation">`, `href="./">Default Identity</a>`, `href="./@bumble/"`, `href="./@default/"`, `href="./@zeta/"`,
 		"<h2>Default Identity</h2>", `href="./report/"`, `href="./status/"`)
 	if strings.Contains(root, `href="./default/"`) {
 		t.Fatalf("default identity added a URL scope: %s", root)
@@ -95,6 +95,9 @@ func TestRefreshIndexesRendersEmptyScope(t *testing.T) {
 	root := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
 	if !strings.Contains(root, "<h2>Default Identity</h2>") || !strings.Contains(root, "No Pages published yet.") {
 		t.Fatalf("empty root index = %s", root)
+	}
+	if strings.Contains(root, `aria-label="Identity navigation"`) {
+		t.Fatalf("empty root index has redundant identity navigation: %s", root)
 	}
 }
 
