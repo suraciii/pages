@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -53,12 +54,16 @@ func NewServer(config ServerConfig) (*Server, error) {
 	if err := stager.Recover(); err != nil {
 		return nil, err
 	}
-	return &Server{
+	server := &Server{
 		stager:         stager,
 		fileSystem:     fileSystem,
 		tokens:         config.Tokens,
 		maxUploadBytes: config.MaxUploadBytes,
-	}, nil
+	}
+	if err := server.RefreshIndex(); err != nil {
+		log.Printf("pages serve: refresh page index: %v", err)
+	}
+	return server, nil
 }
 
 // ReloadTokens replaces the token set after a successful load. A failed
@@ -72,6 +77,11 @@ func (server *Server) ReloadTokens(path string) error {
 	server.tokens = reloaded
 	server.tokensMu.Unlock()
 	return nil
+}
+
+// RefreshIndex rebuilds the static Page Index files from the Public Root.
+func (server *Server) RefreshIndex() error {
+	return RefreshIndexes(server.stager.publicRoot, server.fileSystem)
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -116,6 +126,9 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		}
 		return
+	}
+	if err := server.RefreshIndex(); err != nil {
+		log.Printf("pages serve: refresh page index: %v", err)
 	}
 
 	writer.WriteHeader(http.StatusNoContent)

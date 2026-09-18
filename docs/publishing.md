@@ -2,6 +2,10 @@
 
 A Publisher puts one Page in place and gets back where it lives.
 
+The Public Root also provides a Page Index at its root. Open the Destination
+root to browse the current Pages. A Named Identity has a Page Index at its
+`/@<identity>/` path.
+
 ## Two Ways To Publish
 
 Destination selects the Publish mode. A local path writes into that Public

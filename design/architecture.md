@@ -59,10 +59,12 @@ constant-time hash comparison.
 │       │   └── .upload-<rand>.zip          <- pending zip body, transient
 │       └── @<identity>/                  <- internal Named Identity scope
 │
+├── index.html                              <- generated root Page Index
 ├── report/                                 <- Default Identity Page
 │   ├── index.html
 │   └── img/chart.png
 └── @<identity>/                            <- Named Identity Pages
+    ├── index.html                          <- generated Identity Page Index
     ├── report/                             <- directory Page from a zip
     │   ├── index.html
     │   └── img/chart.png

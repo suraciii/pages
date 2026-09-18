@@ -6,6 +6,8 @@ Minimal static Page publishing. One Go command has three product actions:
   into a Public Root.
 - `pages publish` publishes one HTML file or zip file and prints its public
   URL or local Page directory.
+- The Public Root includes a generated Page Index so readers can browse the
+  currently published Pages.
 - `pages generate-token` issues a Token for the Default or one Named Identity.
 
 `pages skill` prints version-matched instructions for agents.
@@ -135,6 +137,7 @@ Destination syntax, defaults, and input precedence.
 - [Getting Started](docs/getting-started.md) sets up remote Publish from
   install to a live Page.
 - [Publishing](docs/publishing.md) defines the Publish contract and limits.
+- [Page Index](docs/catalog.md) defines the generated navigation pages.
 - [Configuration](docs/configuration.md) lists flags, environment variables,
   and config files.
 - [Deployment](docs/deployment.md) covers systemd, Docker, and the reference

@@ -28,6 +28,8 @@ truth for what is done and what is next.
 - The public static-host contract is validated with Caddy: final Page
   directories are readable by a separate non-root process, `/.pages/*` is
   blocked, and the reference security headers prevent script execution.
+- Page Index: generated root and Named Identity navigation pages are refreshed
+  on startup and after local or remote Publish.
 
 ## Next
 

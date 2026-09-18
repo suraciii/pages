@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -209,6 +210,22 @@ func TestRunLocalPublishesDefaultAndNamedHTML(t *testing.T) {
 		if err != nil || string(page) != "<!doctype html><h1>local</h1>" {
 			t.Fatalf("page = %q, %v", page, err)
 		}
+	}
+}
+
+func TestRunLocalRefreshesPageIndex(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	mustWriteFile(t, fileSystem, "/source/page.html", "page")
+
+	if _, err := Run(&Resolved{File: "/source/page.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	index, err := fileSystem.ReadFile("/public/index.html")
+	if err != nil {
+		t.Fatalf("read page index: %v", err)
+	}
+	if !strings.Contains(string(index), `href="./report/"`) {
+		t.Fatalf("page index = %s", index)
 	}
 }
 

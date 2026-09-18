@@ -17,6 +17,8 @@ diverges significantly from the code, it lists a `Gap` section.
   before writing a spec in `design/`.
 - [architecture.md](architecture.md) — write path, read path, the identity
   boundary, and atomic replacement.
+- [catalog.md](catalog.md) — Page Index scanning, rendering, refresh, and
+  replacement.
 - [cli.md](cli.md) — the `pages` command: `serve`, `publish`,
   `generate-token`, and `skill` subcommands, flags, output, and exit codes.
 - [deployment.md](deployment.md) — hosting the public root: host

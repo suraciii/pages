@@ -233,6 +233,9 @@ func runLocal(resolved *Resolved, fileSystem filesystem.FS) (result string, resu
 			return "", err
 		}
 	}
+	if err := pages.RefreshIndexes(resolved.Destination.LocalPath(), fileSystem); err != nil {
+		return "", fmt.Errorf("refresh page index: %w", err)
+	}
 
 	absoluteTarget, err := fileSystem.Abs(resolved.Destination.LocalPath())
 	if err != nil {
