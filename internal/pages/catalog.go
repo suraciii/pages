@@ -17,6 +17,7 @@ import (
 const (
 	catalogStagingName = "catalog-staging"
 	catalogLockName    = "catalog.lock"
+	catalogMarker      = "<!-- pages:page-index -->"
 )
 
 type catalogScope struct {
@@ -67,6 +68,9 @@ func RefreshIndexes(publicRoot string, fileSystem filesystem.FS) error {
 		return err
 	}
 	targets := makeCatalogTargets(publicRoot, scopes)
+	if err := ensureCatalogTargetsSafe(targets, fileSystem); err != nil {
+		return err
+	}
 	for _, target := range targets {
 		if err := writeCatalog(target, stagingDir, fileSystem); err != nil {
 			return err
@@ -188,6 +192,7 @@ func renderIdentityIndex(identity string, pages []string) []byte {
 
 func writeDocumentStart(body *bytes.Buffer, title, heading string) {
 	body.WriteString("<!doctype html>\n<html lang=\"en\">\n<head>\n")
+	body.WriteString(catalogMarker + "\n")
 	body.WriteString("<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	body.WriteString("<title>")
 	body.WriteString(html.EscapeString(title))
@@ -195,6 +200,24 @@ func writeDocumentStart(body *bytes.Buffer, title, heading string) {
 	body.WriteString("</head>\n<body>\n<main>\n<h1>")
 	body.WriteString(html.EscapeString(heading))
 	body.WriteString("</h1>\n")
+}
+
+func ensureCatalogTargetsSafe(targets []catalogTarget, fileSystem filesystem.FS) error {
+	for _, target := range targets {
+		if _, err := fileSystem.Lstat(target.path); errors.Is(err, fs.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return fmt.Errorf("inspect existing catalog %q: %w", target.path, err)
+		}
+		content, err := fileSystem.ReadFile(target.path)
+		if err != nil || !bytes.Contains(content, []byte(catalogMarker)) {
+			if err != nil {
+				return fmt.Errorf("refusing to replace existing catalog %q: %w", target.path, err)
+			}
+			return fmt.Errorf("refusing to replace existing catalog %q: move the existing file first", target.path)
+		}
+	}
+	return nil
 }
 
 func writeDocumentEnd(body *bytes.Buffer) {

@@ -54,10 +54,17 @@ after a successful Page swap. Local Publish and server Upload use the same
 generator. A refresh scans the complete Public Root, so the root and all
 Identity Indexes converge to the same snapshot.
 
-Refresh uses a temporary file under `.pages/` and an atomic replacement. The
-old Index remains in place when generation fails. A successful Page swap is
-not rolled back because an Index refresh fails; the failure is reported to the
-caller or service log and the next startup refresh repairs it.
+Before replacing any target, refresh checks every existing target. An existing
+file must contain the Page Index marker. A different file is preserved and
+refresh fails without changing any Index. The operator must move that file
+before enabling Page Index generation.
+
+Refresh uses a temporary file under `.pages/` and an atomic replacement for
+each target. The root and Identity Indexes are not one filesystem transaction:
+if a later target fails, earlier targets may already be replaced. A successful
+Page swap is not rolled back because an Index refresh fails; the failure is
+reported to the caller or service log and the next startup refresh repairs any
+mixed state.
 
 The root and Identity Indexes are refreshed under one Public Root lock so two
 local Publishers cannot interleave Index writes. Existing Page swap locking

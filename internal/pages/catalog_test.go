@@ -43,6 +43,41 @@ func TestRefreshIndexesRendersEmptyScope(t *testing.T) {
 	}
 }
 
+func TestRefreshIndexesRefusesExistingNonPageIndex(t *testing.T) {
+	_, fileSystem, publicRoot := newMemoryStager(t)
+	manualIndex := "<!doctype html><h1>existing home</h1>"
+	mustWriteMemoryFile(t, fileSystem, filepath.Join(publicRoot, "index.html"), manualIndex)
+
+	err := RefreshIndexes(publicRoot, fileSystem)
+	if err == nil || !strings.Contains(err.Error(), "move the existing file first") {
+		t.Fatalf("refresh error = %v, want refusal", err)
+	}
+	contents, readErr := fileSystem.ReadFile(filepath.Join(publicRoot, "index.html"))
+	if readErr != nil || string(contents) != manualIndex {
+		t.Fatalf("existing index = %q, %v", contents, readErr)
+	}
+}
+
+func TestRefreshIndexesChecksAllTargetsBeforeReplacingAny(t *testing.T) {
+	stager, fileSystem, publicRoot := newMemoryStager(t)
+	publishStagedHTML(t, stager, "", "report", "report")
+	publishStagedHTML(t, stager, "bumble", "overview", "overview")
+	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+		t.Fatalf("initial refresh: %v", err)
+	}
+	rootBefore := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
+	mustWriteMemoryFile(t, fileSystem, filepath.Join(publicRoot, "@bumble", "index.html"), "manual identity home")
+
+	err := RefreshIndexes(publicRoot, fileSystem)
+	if err == nil || !strings.Contains(err.Error(), "move the existing file first") {
+		t.Fatalf("refresh error = %v, want refusal", err)
+	}
+	rootAfter := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
+	if rootAfter != rootBefore {
+		t.Fatalf("root index changed before refusal: before=%q after=%q", rootBefore, rootAfter)
+	}
+}
+
 func TestRefreshIndexesIgnoresInvalidAndIncompleteEntries(t *testing.T) {
 	_, fileSystem, publicRoot := newMemoryStager(t)
 	mustWriteMemoryFile(t, fileSystem, filepath.Join(publicRoot, "not-a-page", "asset.txt"), "asset")
@@ -66,7 +101,7 @@ func TestRefreshIndexesRecoversInterruptedReplacement(t *testing.T) {
 	if err := fileSystem.MkdirAll(staging, 0o700); err != nil {
 		t.Fatalf("create catalog staging: %v", err)
 	}
-	mustWriteMemoryFile(t, fileSystem, filepath.Join(staging, "old-deadbeefdeadbeef-root"), "old index")
+	mustWriteMemoryFile(t, fileSystem, filepath.Join(staging, "old-deadbeefdeadbeef-root"), catalogMarker+"\nold index")
 
 	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
 		t.Fatalf("refresh indexes: %v", err)

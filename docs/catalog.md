@@ -39,6 +39,10 @@ Pages generates the root and Identity Indexes from the current Public Root.
 The existing static host serves them like every other static file. The
 Publisher's output and the Upload contract do not change.
 
+`index.html` at the Public Root and inside a Named Identity is reserved for a
+Page Index. Pages does not replace an existing file that is not a Page Index;
+an operator must move that file before enabling this feature.
+
 ## Status
 
 Implemented. Page Index generation is part of `pages serve` startup and both
