@@ -1,0 +1,50 @@
+# pages
+
+> Minimal static Page publishing. One Go command uploads one HTML file or one
+> zip directory Page and returns where it lives. The Public Root also serves a
+> generated Page Index and Page Record for browsing the current Pages.
+
+## Start here
+
+- [Product overview](README.md): The three product actions, what pages keeps,
+  and what it does not.
+- [Getting started](docs/getting-started.md): One pass from install to a live
+  Page, including the static host.
+- [Publishing](docs/publishing.md): The Publish contract, both modes, partial
+  effects, and limits.
+
+## Tasks
+
+- [Publish one Page](docs/publishing.md#two-ways-to-publish): Local and remote
+  Publish, Destination selection, and the printed result.
+- [Browse current Pages](docs/catalog.md): The Page Index, the Published Time
+  of each Page, and the Page Record.
+- [Configure Publish](docs/configuration.md): Tokens file, publish config
+  file, flags, and environment variables.
+- [Run the service](docs/deployment.md): systemd, Docker, and the reference
+  Caddy configuration, including the Content Security Policy.
+
+## Contracts
+
+- [Command contract](design/cli.md): Command grammar, Destination syntax,
+  input precedence, output, and exit codes.
+- [Architecture](design/architecture.md): The write path, the identity
+  boundary, and atomic replacement.
+- [Page Index design](design/catalog.md): Scanning, rendering, Published Time,
+  the Page Record, refresh, and replacement.
+
+## Checks and recovery
+
+- [Reader guarantees](docs/publishing.md#reader-guarantees): What a reader
+  sees during a swap, and what a repeat Publish means.
+- [Partial effects](docs/publishing.md#partial-effects): Failure after the
+  Page is in place, and how to check before publishing again.
+- [Testing](design/testing.md): The unit test strategy and the verification
+  gate.
+
+## Limits
+
+- [Limits](docs/publishing.md#limits): No archive, revision, or history; no
+  standard input; Page scripts are the host's responsibility.
+- [Not planned](ROADMAP.md): Archives, revisions, histories, rollback,
+  SQLite, and CI are outside the product contract.

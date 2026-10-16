@@ -105,6 +105,44 @@ func TestPublisherFailsWhenPublicPageIsNotHTML(t *testing.T) {
 	}
 }
 
+func TestPublisherReportsPageInPlaceWhenVerificationFails(t *testing.T) {
+	for _, testCase := range []struct {
+		name         string
+		verifyStatus int
+		verifyType   string
+	}{
+		{name: "missing page", verifyStatus: http.StatusNotFound, verifyType: "text/plain"},
+		{name: "non-html page", verifyStatus: http.StatusOK, verifyType: "application/json"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fileSystem := memoryPage(t, "/source/page.html", "<!doctype html><h1>Ticket</h1>")
+			client := testHTTPClient(func(request *http.Request) *http.Response {
+				if request.Method == http.MethodPost {
+					return response(http.StatusNoContent, "")
+				}
+				return response(testCase.verifyStatus, testCase.verifyType)
+			})
+			publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one", HTTPClient: client, FileSystem: fileSystem}
+
+			publicURL, err := publisher.Publish(context.Background(), "/source/page.html", "ticket-status")
+			if err == nil {
+				t.Fatal("publish succeeded, want verification error")
+			}
+			if publicURL != "" {
+				t.Fatalf("public URL = %q, want empty", publicURL)
+			}
+			for _, want := range []string{
+				"the page is in place at https://pages.example.com/@bumble/ticket-status/",
+				"check the static host",
+			} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error = %q, want to contain %q", err, want)
+				}
+			}
+		})
+	}
+}
+
 func TestPublisherUploadsZipWithZipContentType(t *testing.T) {
 	fileSystem := memoryPage(t, "/source/page.zip", "zip bytes")
 	var uploadedContentType string

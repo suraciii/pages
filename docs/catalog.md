@@ -13,19 +13,39 @@ when Named Identities exist, provides the same Identity navigation:
 ```text literal
 Pages
 
-Default Identity   Current   /
-@bumble/           Named Identity   /@bumble/
+Default Identity   /
+@bumble/           /@bumble/
 
 Default Identity
 
-report/       Page       /report/
-status/       Page       /status/
+status/       2026-10-16 21:02   /status/
+report/       2026-10-16 14:35   /report/
 ```
 
 An Identity Index lists only the Pages in that Identity and includes the
-Identity navigation plus a link to its parent Index. The current Identity is
-marked `Current`. A Page link opens the Page at its trailing-slash URL. The
-Index does not list files inside a Page.
+Identity navigation plus a link to its parent Index. A Page link opens the
+Page at its trailing-slash URL. The Index does not list files inside a Page.
+
+## Page Record
+
+The Public Root also serves a Page Record at `/index.json`, and a Named
+Identity serves its own at `/@<identity>/index.json`. A Page Record carries
+the same Page entries as its Index in a structured form, so a program can
+read the current Pages without parsing HTML:
+
+```text literal
+{
+  "pages": [
+    {"slug": "status", "published": "2026-10-16T21:02:13+08:00"},
+    {"slug": "report", "published": "2026-10-16T14:35:00+08:00"}
+  ]
+}
+```
+
+A Page Record lists the Pages in one scope only, in the same order as its
+Index. The `published` value is the exact Published Time in RFC 3339 form.
+A Page Record has no field for Page content, size, or assets. It names no
+scope: the file path already says which scope it belongs to.
 
 ## Rules
 
@@ -41,21 +61,33 @@ Index does not list files inside a Page.
   modification time. Publishing again moves a Page according to its new
   time. Equal times use Slug order. Existing Pages use their current file
   times.
+- Every Page entry shows its Published Time, the same `index.html`
+  modification time that orders the list. The time is shown to the minute
+  and matches what `ls -l` reports for the Page directory. The displayed
+  value carries no zone: a reader browsing the host's Index reads the host's
+  wall-clock time, so a zone suffix repeats what the times already imply. The
+  machine-readable value in the Page Record carries the exact zone.
 - Named Identity entries use lexicographic order.
 - The Index uses relative links so a URL path prefix remains valid.
 - An empty Index states that no Page is published in that scope.
-- The Index contains no scripts, external assets, timestamps, versions, tags,
-  search, or history.
+- The Index contains no scripts, external assets, versions, tags, search, or
+  history. It shows the Published Time of each Page and nothing else about it.
+- The Page Record carries the same entries as the Index and nothing more. It
+  has no scripts and no links.
 - The Index is public wherever the Public Root is public. It must not be
   treated as an access-control boundary.
 
-Pages generates the root and Identity Indexes from the current Public Root.
-The existing static host serves them like every other static file. The
-Publisher's output and the Upload contract do not change.
+Pages generates the root and Identity Indexes and Page Records from the
+current Public Root. The existing static host serves them like every other
+static file. The Publisher's output and the Upload contract do not change.
 
 `index.html` at the Public Root and inside a Named Identity is reserved for a
-Page Index. Pages does not replace an existing file that is not a Page Index;
-an operator must move that file before enabling this feature.
+Page Index, and `index.json` is reserved for a Page Record. Pages does not
+replace an existing file that is not one of these; an operator must move that
+file before enabling this feature.
+
+The Index and the Page Record are system artifacts. Pages replaces them on
+every refresh, so a manual edit to either one is lost on the next refresh.
 
 ## Status
 

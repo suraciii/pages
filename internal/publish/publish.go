@@ -109,12 +109,12 @@ func Resolve(input Input, runtime Runtime) (*Resolved, error) {
 	if !pages.ValidName(input.Slug) {
 		return nil, fmt.Errorf("%w: invalid slug %q", ErrUsage, input.Slug)
 	}
+	if info, statError := runtime.FileSystem.Stat(input.File); statError == nil && info.IsDir() {
+		return nil, fmt.Errorf("%w: --file must not be a directory; package it as a zip", ErrUsage)
+	}
 	extension := strings.ToLower(filepath.Ext(input.File))
 	if extension != ".html" && extension != ".zip" {
 		return nil, fmt.Errorf("%w: --file must end in .html or .zip", ErrUsage)
-	}
-	if info, statError := runtime.FileSystem.Stat(input.File); statError == nil && info.IsDir() {
-		return nil, fmt.Errorf("%w: --file must not be a directory; package it as a zip", ErrUsage)
 	}
 
 	resolvedDestination, err := destination.Parse(firstNonEmpty(input.Destination, runtime.Environment("PAGES_DESTINATION"), config.Destination), runtime.CurrentDirectory)
@@ -177,7 +177,13 @@ func Run(resolved *Resolved, runtime Runtime) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), resolved.Timeout)
 	defer cancel()
 	publisher := client.Publisher{BaseURL: resolved.Destination.String(), Token: resolved.Token, HTTPClient: runtime.HTTPClient, FileSystem: runtime.FileSystem}
-	return publisher.Publish(ctx, resolved.File, resolved.Slug)
+	result, err := publisher.Publish(ctx, resolved.File, resolved.Slug)
+	if errors.Is(err, client.ErrEmptyPageFile) {
+		// The body rules are usage errors in both modes, so an empty file
+		// exits 2 wherever it is caught.
+		return "", fmt.Errorf("%w: page file is empty", ErrUsage)
+	}
+	return result, err
 }
 
 // runLocal writes the page directly into the local public root with the
@@ -185,6 +191,17 @@ func Run(resolved *Resolved, runtime Runtime) (string, error) {
 // checks run: at most 512 entries and an uncompressed total of at most
 // four times the compressed size.
 func runLocal(resolved *Resolved, fileSystem filesystem.FS) (result string, resultErr error) {
+	absoluteTarget, err := fileSystem.Abs(resolved.Destination.LocalPath())
+	if err != nil {
+		return "", fmt.Errorf("resolve public root: %w", err)
+	}
+	segments := []string{absoluteTarget}
+	if scope := pages.IdentityScope(resolved.Identity); scope != "" {
+		segments = append(segments, scope)
+	}
+	segments = append(segments, resolved.Slug)
+	pageDir := filepath.Join(segments...)
+
 	stager, err := pages.NewStager(resolved.Destination.LocalPath(), fileSystem)
 	if err != nil {
 		return "", err
@@ -220,33 +237,39 @@ func runLocal(resolved *Resolved, fileSystem filesystem.FS) (result string, resu
 			source.Close()
 			return "", fmt.Errorf("create staged page: %w", err)
 		}
-		_, copyError := io.Copy(target, source)
+		// The body rules run while the Page streams into the staging area, so
+		// nothing is staged for a rejected Page and no full copy is held in
+		// memory. This mirrors the server's Upload path.
+		validator := pages.NewUTF8Validator()
+		bytesWritten, copyError := io.Copy(target, io.TeeReader(source, validator))
 		source.Close()
 		closeError := target.Close()
 		if copyError != nil {
+			_ = fileSystem.RemoveAll(stagedDir)
+			if errors.Is(copyError, pages.ErrInvalidUTF8) {
+				return "", fmt.Errorf("%w: page file is not valid UTF-8", ErrUsage)
+			}
 			return "", fmt.Errorf("write page: %w", copyError)
 		}
 		if closeError != nil {
 			return "", fmt.Errorf("close page: %w", closeError)
+		}
+		if bytesWritten == 0 {
+			_ = fileSystem.RemoveAll(stagedDir)
+			return "", fmt.Errorf("%w: page file is empty", ErrUsage)
+		}
+		if !validator.Valid() {
+			_ = fileSystem.RemoveAll(stagedDir)
+			return "", fmt.Errorf("%w: page file is not valid UTF-8", ErrUsage)
 		}
 		if err := stager.SwapHTML(resolved.Identity, resolved.Slug, stagedDir); err != nil {
 			return "", err
 		}
 	}
 	if err := pages.RefreshIndexes(resolved.Destination.LocalPath(), fileSystem); err != nil {
-		return "", fmt.Errorf("refresh page index: %w", err)
+		return "", fmt.Errorf("refresh page index: %w; the page is in place at %s", err, pageDir)
 	}
-
-	absoluteTarget, err := fileSystem.Abs(resolved.Destination.LocalPath())
-	if err != nil {
-		return "", fmt.Errorf("resolve public root: %w", err)
-	}
-	segments := []string{absoluteTarget}
-	if scope := pages.IdentityScope(resolved.Identity); scope != "" {
-		segments = append(segments, scope)
-	}
-	segments = append(segments, resolved.Slug)
-	return filepath.Join(segments...) + string(filepath.Separator), nil
+	return pageDir + string(filepath.Separator), nil
 }
 
 func firstNonEmpty(values ...string) string {
