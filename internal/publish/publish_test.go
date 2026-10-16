@@ -188,6 +188,25 @@ func TestLoadConfigRejectsUnknownField(t *testing.T) {
 	}
 }
 
+func TestResolveRejectsDirectoryFile(t *testing.T) {
+	for _, name := range []string{"/source/report", "/source/report.html"} {
+		t.Run(name, func(t *testing.T) {
+			runtime, fileSystem := testRuntime(nil)
+			if err := fileSystem.MkdirAll(name, 0o755); err != nil {
+				t.Fatalf("create directory: %v", err)
+			}
+			_, err := Resolve(Input{File: name, Slug: "report", Timeout: time.Minute}, runtime)
+			if !errors.Is(err, ErrUsage) {
+				t.Fatalf("err = %v, want usage error", err)
+			}
+			want := "--file must not be a directory; package it as a zip"
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("err = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
 func TestRunLocalPublishesDefaultAndNamedHTML(t *testing.T) {
 	runtime, fileSystem := testRuntime(nil)
 	pageFile := "/source/page.html"
@@ -301,6 +320,91 @@ func TestRunLocalRejectsBadZipAndLeavesNoTrace(t *testing.T) {
 	}
 	if _, err := fileSystem.Stat("/public/report"); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("page exists after rejected publish: %v", err)
+	}
+}
+
+func TestRunLocalRejectsEmptyAndInvalidUTF8HTML(t *testing.T) {
+	for name, content := range map[string]string{
+		"empty":        "",
+		"invalid-utf8": "\xff\xfe<h1>bad</h1>",
+	} {
+		t.Run(name, func(t *testing.T) {
+			runtime, fileSystem := testRuntime(nil)
+			if err := publishExistingPage(t, fileSystem); err != nil {
+				t.Fatalf("publish existing page: %v", err)
+			}
+			pageFile := "/source/page.html"
+			if err := fileSystem.MkdirAll("/source", 0o755); err != nil {
+				t.Fatalf("create source: %v", err)
+			}
+			if err := fileSystem.WriteFile(pageFile, []byte(content), 0o644); err != nil {
+				t.Fatalf("write page file: %v", err)
+			}
+
+			_, err := Run(&Resolved{File: pageFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime)
+			if !errors.Is(err, ErrUsage) {
+				t.Fatalf("err = %v, want usage error", err)
+			}
+			assertPageUnchanged(t, fileSystem)
+			// Nothing is staged: the check runs before StageDir.
+			staging := "/public/.pages/staging/default"
+			entries, readErr := fileSystem.ReadDir(staging)
+			if readErr == nil && len(entries) > 0 {
+				t.Fatalf("staged %d entries after a rejected publish", len(entries))
+			} else if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+				t.Fatalf("read staging: %v", readErr)
+			}
+		})
+	}
+}
+
+func TestRunLocalRefreshFailureReportsPageInPlace(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	if err := publishExistingPage(t, fileSystem); err != nil {
+		t.Fatalf("publish existing page: %v", err)
+	}
+	// A non-Index file at the root index.html blocks the refresh.
+	mustWriteFile(t, fileSystem, "/public/index.html", "<h1>not a page index</h1>")
+	mustWriteFile(t, fileSystem, "/source/page.html", "<h1>replacement</h1>")
+
+	_, runErr := Run(&Resolved{File: "/source/page.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime)
+	if runErr == nil {
+		t.Fatal("run succeeded, want refresh failure")
+	}
+	if errors.Is(runErr, ErrUsage) {
+		t.Fatalf("err = %v, want operational failure", runErr)
+	}
+	absolutePublicRoot, absErr := fileSystem.Abs("/public")
+	if absErr != nil {
+		t.Fatalf("resolve public root: %v", absErr)
+	}
+	pageDir := filepath.Join(absolutePublicRoot, "report")
+	for _, want := range []string{"refresh page index", "refusing to replace existing catalog", pageDir} {
+		if !strings.Contains(runErr.Error(), want) {
+			t.Fatalf("err = %v, want %q", runErr, want)
+		}
+	}
+	page, readErr := fileSystem.ReadFile(filepath.Join(pageDir, "index.html"))
+	if readErr != nil || string(page) != "<h1>replacement</h1>" {
+		t.Fatalf("page = %q, %v", page, readErr)
+	}
+}
+
+// publishExistingPage puts one Page at /public/report so a later assertion
+// can prove the rejected publish left it unchanged.
+func publishExistingPage(t *testing.T, fileSystem filesystem.FS) error {
+	t.Helper()
+	mustWriteFile(t, fileSystem, "/source/first.html", "<h1>first</h1>")
+	runtime := Runtime{FileSystem: fileSystem}
+	_, err := Run(&Resolved{File: "/source/first.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime)
+	return err
+}
+
+func assertPageUnchanged(t *testing.T, fileSystem filesystem.FS) {
+	t.Helper()
+	page, err := fileSystem.ReadFile("/public/report/index.html")
+	if err != nil || string(page) != "<h1>first</h1>" {
+		t.Fatalf("page = %q, %v, want the existing page", page, err)
 	}
 }
 

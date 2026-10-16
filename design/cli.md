@@ -237,8 +237,9 @@ Common steps:
 2. `--file` names one existing regular file that ends in `.html` or `.zip`.
    A `.html` file uploads as `text/html` and a `.zip` file as
    `application/zip`. A directory is rejected with a usage error that says to
-   package it as a zip. The check order is: missing `--file`, unsupported
-   extension, then directory.
+   package it as a zip. The check order is: missing `--file`, then directory,
+   then unsupported extension, so a directory named `report.html` reports the
+   directory rule rather than the extension rule.
 3. The `--slug` value must be a valid Slug: at most 63 lowercase letters,
    digits, or hyphens, and it starts with a letter or digit. An invalid value
    is a usage error.

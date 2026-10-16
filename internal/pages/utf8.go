@@ -5,14 +5,23 @@ import (
 	"unicode/utf8"
 )
 
-var errInvalidUTF8 = errors.New("body is not valid UTF-8")
+// ErrInvalidUTF8 marks a Page body that is not valid UTF-8. Both the
+// server Upload path and local Publish report it as a rejected Page.
+var ErrInvalidUTF8 = errors.New("body is not valid UTF-8")
 
-// utf8Validator validates a stream without retaining the published body.
-type utf8Validator struct {
+// UTF8Validator validates a stream without retaining the published body.
+// Callers write the Page bytes through it while they copy the Page into
+// place, then read Valid once the copy ends.
+type UTF8Validator struct {
 	pending []byte
 }
 
-func (validator *utf8Validator) Write(chunk []byte) (int, error) {
+// NewUTF8Validator returns a validator with no buffered bytes.
+func NewUTF8Validator() *UTF8Validator {
+	return &UTF8Validator{}
+}
+
+func (validator *UTF8Validator) Write(chunk []byte) (int, error) {
 	data := make([]byte, len(validator.pending)+len(chunk))
 	copy(data, validator.pending)
 	copy(data[len(validator.pending):], chunk)
@@ -25,13 +34,14 @@ func (validator *utf8Validator) Write(chunk []byte) (int, error) {
 		}
 		_, size := utf8.DecodeRune(data)
 		if size == 1 && data[0] >= utf8.RuneSelf {
-			return len(chunk), errInvalidUTF8
+			return len(chunk), ErrInvalidUTF8
 		}
 		data = data[size:]
 	}
 	return len(chunk), nil
 }
 
-func (validator *utf8Validator) Valid() bool {
+// Valid reports whether every byte written so far formed complete UTF-8.
+func (validator *UTF8Validator) Valid() bool {
 	return len(validator.pending) == 0
 }

@@ -125,8 +125,9 @@ A Publish can fail after the Page is already in place. The two cases:
 - Remote mode: the Upload succeeded but the verification `GET` failed. The
   Page is live. The static host is the likely cause.
 - Local mode: the Page swap succeeded but the Page Index refresh failed. The
-  Page is live. A non-Page-Index file at `<public-root>/index.html` or
-  `<public-root>/@<identity>/index.html` is the likely cause.
+  Page is live. A foreign file at `<public-root>/index.html`,
+  `<public-root>/index.json`, `<public-root>/@<identity>/index.html`, or
+  `<public-root>/@<identity>/index.json` is the likely cause.
 
 When this happens the command reports the failure and exits 1, but the Page
 is in place. Check the printed Page path or URL before publishing again. The

@@ -118,7 +118,7 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 
 	if err := server.publish(writer, request, identity, slug); err != nil {
 		switch {
-		case errors.Is(err, errInvalidUTF8), errors.Is(err, errEmptyBody), errors.Is(err, errInvalidZip):
+		case errors.Is(err, ErrInvalidUTF8), errors.Is(err, errEmptyBody), errors.Is(err, errInvalidZip):
 			http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		case isMaxBytesError(err):
 			http.Error(writer, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
@@ -162,7 +162,7 @@ func (server *Server) publishHTML(writer http.ResponseWriter, request *http.Requ
 
 	limitedBody := http.MaxBytesReader(writer, request.Body, server.maxUploadBytes)
 	defer limitedBody.Close()
-	validator := &utf8Validator{}
+	validator := NewUTF8Validator()
 	bytesWritten, copyError := io.Copy(indexFile, io.TeeReader(limitedBody, validator))
 	closeError := indexFile.Close()
 	if copyError != nil {
@@ -175,7 +175,7 @@ func (server *Server) publishHTML(writer http.ResponseWriter, request *http.Requ
 		return errEmptyBody
 	}
 	if !validator.Valid() {
-		return errInvalidUTF8
+		return ErrInvalidUTF8
 	}
 	return server.stager.SwapHTML(identity, slug, stagedDir)
 }
