@@ -127,9 +127,12 @@ the root and all Identity artifacts converge to the same snapshot.
 
 Before replacing any target, refresh checks every existing target. An existing
 `index.html` must contain the Page Index marker and an existing `index.json`
-must contain the Page Record marker. A different file is preserved and
-refresh fails without changing any artifact. The operator must move that file
-before enabling Page Index generation.
+must begin with the Page Record marker. A Record is matched at the start
+because JSON that embeds the `pages` key inside a nested object is a foreign
+file; an Index is matched anywhere in the document because the host may have
+wrapped the generated HTML. A different file is preserved and refresh fails
+without changing any artifact. The operator must move that file before
+enabling Page Index generation.
 
 Refresh uses a temporary file under `.pages/` and an atomic replacement for
 each target. The targets are not one filesystem transaction: if a later
@@ -138,8 +141,11 @@ is not rolled back because a refresh fails; the failure is reported to the
 caller or service log and the next startup refresh repairs any mixed state.
 
 The artifacts are refreshed under one Public Root lock so two local Publishers
-cannot interleave Index writes. Existing Page swap locking and its caller
-responsibility for concurrent local Publish remain unchanged.
+cannot interleave Index writes. The lock excludes other processes; refreshes
+inside one process are serialized separately, because a POSIX record lock is
+owned by the process rather than the file descriptor. Existing Page swap
+locking and its caller responsibility for concurrent local Publish remain
+unchanged.
 
 ### Ownership
 

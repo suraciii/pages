@@ -58,12 +58,13 @@ start a process, or use an external service.
   current-scope links, the Published Time rendered next to each Page link, and
   refresh after local and server Publish.
   File times are supplied by an in-memory file-system test dependency.
-- Page Record tests cover the `identity` field for the root and a Named
-  Identity scope, the `slug` and `published` fields with the exact RFC 3339
-  value, the same order and membership as the Index of the same scope, the
-  empty `pages` array for an empty scope, and refusal to replace an existing
-  `index.json` that is not a Page Record. A Record and its Index are read
-  from one refresh and compared.
+- Page Record tests cover the `slug` and `published` fields with the exact
+  RFC 3339 value, the same order and membership as the Index of the same
+  scope, the empty `pages` array for an empty scope, and refusal to replace
+  an existing `index.json` that is not a Page Record. A Record carries no
+  scope field, and a foreign file that embeds the `pages` key inside a nested
+  object is not a Record. A Record and its Index are read from one refresh
+  and compared.
 - Size limits must stay configurable through `ServerConfig` so tests do not
   wait on real time or allocate large resources.
 - Tests must not use `t.TempDir`, `os.CreateTemp`, physical file paths,

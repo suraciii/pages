@@ -69,6 +69,14 @@ func runPublish(args []string, runtime commandRuntime) int {
 
 	result, err := publish.Run(resolved, runtime.publishRuntime())
 	if err != nil {
+		if errors.Is(err, publish.ErrUsage) {
+			// Run reports the body rules as usage errors: an empty file and
+			// a file that is not UTF-8. They exit 2 like every other usage
+			// error, not 1 like a failed step.
+			fmt.Fprintf(runtime.stderr, "pages publish: %v\n", err)
+			flags.Usage()
+			return 2
+		}
 		fmt.Fprintf(runtime.stderr, "pages publish: %v\n", err)
 		return 1
 	}

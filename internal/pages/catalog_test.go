@@ -191,6 +191,38 @@ func TestRefreshIndexesRefusesForeignRecordWithPagesKey(t *testing.T) {
 	}
 }
 
+// A foreign `index.json` that embeds the pages key inside a nested object
+// is not a Page Record and must be preserved: a Record starts with the
+// marker, it does not merely contain it.
+func TestRefreshIndexesRefusesRecordMarkerInsideNestedJSON(t *testing.T) {
+	for name, content := range map[string]string{
+		"nested object":  "{\"export\":{\n  \"pages\": [\"a\"]}}",
+		"pages in value": "{\"note\":\"see {\\n  \\\"pages\\\": [\"}",
+		"compact form":   `{"pages":[]}`,
+		"leading blank":  "\n{\n  \"pages\": [\n  ]\n}\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			stager, fileSystem, publicRoot := newMemoryStager(t)
+			publishStagedHTML(t, stager, "", "report", "report")
+			if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+				t.Fatalf("initial refresh: %v", err)
+			}
+			if err := fileSystem.Remove(filepath.Join(publicRoot, "index.json")); err != nil {
+				t.Fatalf("remove record: %v", err)
+			}
+			mustWriteMemoryFile(t, fileSystem, filepath.Join(publicRoot, "index.json"), content)
+
+			err := RefreshIndexes(publicRoot, fileSystem)
+			if err == nil || !strings.Contains(err.Error(), "move the existing file first") {
+				t.Fatalf("refresh error = %v, want refusal", err)
+			}
+			if recordAfter := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.json")); recordAfter != content {
+				t.Fatalf("record changed before refusal: %q", recordAfter)
+			}
+		})
+	}
+}
+
 func TestRefreshIndexesRecoversInterruptedRecordReplacement(t *testing.T) {
 	_, fileSystem, publicRoot := newMemoryStager(t)
 	staging := filepath.Join(publicRoot, ".pages", catalogStagingName)

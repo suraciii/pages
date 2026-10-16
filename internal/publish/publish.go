@@ -177,7 +177,13 @@ func Run(resolved *Resolved, runtime Runtime) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), resolved.Timeout)
 	defer cancel()
 	publisher := client.Publisher{BaseURL: resolved.Destination.String(), Token: resolved.Token, HTTPClient: runtime.HTTPClient, FileSystem: runtime.FileSystem}
-	return publisher.Publish(ctx, resolved.File, resolved.Slug)
+	result, err := publisher.Publish(ctx, resolved.File, resolved.Slug)
+	if errors.Is(err, client.ErrEmptyPageFile) {
+		// The body rules are usage errors in both modes, so an empty file
+		// exits 2 wherever it is caught.
+		return "", fmt.Errorf("%w: page file is empty", ErrUsage)
+	}
+	return result, err
 }
 
 // runLocal writes the page directly into the local public root with the

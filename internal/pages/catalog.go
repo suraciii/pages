@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/suraciii/pages/internal/filesystem"
@@ -48,6 +49,17 @@ type catalogTarget struct {
 	content []byte
 }
 
+// catalogRefreshMu serializes refreshes inside one process. The file lock
+// excludes other processes only: POSIX record locks are owned by the
+// process, so a second goroutine in this process would take the same lock
+// without blocking and two refreshes could interleave their writes.
+//
+// The gap is not covered by a test: the in-memory file system implements
+// Lock as a per-path mutex, so an in-memory test cannot observe two
+// refreshes inside one process overlapping, and design/testing.md forbids
+// a test that touches a physical file system.
+var catalogRefreshMu sync.Mutex
+
 // RefreshIndexes rebuilds the root and Named Identity Page Indexes from the
 // current Public Root. The Index files are system artifacts, not Pages.
 func RefreshIndexes(publicRoot string, fileSystem filesystem.FS) error {
@@ -57,6 +69,8 @@ func RefreshIndexes(publicRoot string, fileSystem filesystem.FS) error {
 	if fileSystem == nil {
 		fileSystem = filesystem.OS
 	}
+	catalogRefreshMu.Lock()
+	defer catalogRefreshMu.Unlock()
 	privateRoot := filepath.Join(publicRoot, ".pages")
 	if err := fileSystem.MkdirAll(privateRoot, 0o700); err != nil {
 		return fmt.Errorf("create pages state: %w", err)
@@ -297,6 +311,11 @@ func writeDocumentStart(body *bytes.Buffer, title, heading string) {
 	body.WriteString("</h1>\n")
 }
 
+// ensureCatalogTargetsSafe refuses to replace a target that is not a pages
+// artifact. A Page Index is recognized by its marker anywhere in the file,
+// because an Index is HTML a host may have wrapped. A Page Record is
+// recognized by its prefix, because JSON that merely embeds the pages key
+// somewhere in a nested object is a foreign file.
 func ensureCatalogTargetsSafe(targets []catalogTarget, fileSystem filesystem.FS) error {
 	for _, target := range targets {
 		if _, err := fileSystem.Lstat(target.path); errors.Is(err, fs.ErrNotExist) {
@@ -305,14 +324,24 @@ func ensureCatalogTargetsSafe(targets []catalogTarget, fileSystem filesystem.FS)
 			return fmt.Errorf("inspect existing catalog %q: %w", target.path, err)
 		}
 		content, err := fileSystem.ReadFile(target.path)
-		if err != nil || !bytes.Contains(content, []byte(target.marker)) {
-			if err != nil {
-				return fmt.Errorf("refusing to replace existing catalog %q: %w", target.path, err)
-			}
+		if err != nil {
+			return fmt.Errorf("refusing to replace existing catalog %q: %w", target.path, err)
+		}
+		if !isCatalogArtifact(content, target.marker, target.path) {
 			return fmt.Errorf("refusing to replace existing catalog %q: move the existing file first", target.path)
 		}
 	}
 	return nil
+}
+
+// isCatalogArtifact reports whether content is a pages artifact marked by
+// marker. A JSON marker must match at the start of the file; an HTML marker
+// may appear anywhere in the document.
+func isCatalogArtifact(content []byte, marker, path string) bool {
+	if strings.HasSuffix(path, catalogRecordName) {
+		return bytes.HasPrefix(content, []byte(marker))
+	}
+	return bytes.Contains(content, []byte(marker))
 }
 
 func writeDocumentEnd(body *bytes.Buffer) {

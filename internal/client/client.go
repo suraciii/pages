@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -13,6 +14,10 @@ import (
 	"github.com/suraciii/pages/internal/filesystem"
 	"github.com/suraciii/pages/internal/pages"
 )
+
+// ErrEmptyPageFile marks a Page file with no bytes. Both Publish modes
+// report it as a usage error.
+var ErrEmptyPageFile = errors.New("page file is empty")
 
 // Publisher uploads one standalone HTML file and verifies its public URL.
 type Publisher struct {
@@ -51,7 +56,7 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 		return "", fmt.Errorf("stat page file: %w", err)
 	}
 	if fileInfo.Size() == 0 {
-		return "", fmt.Errorf("page file is empty")
+		return "", fmt.Errorf("%w", ErrEmptyPageFile)
 	}
 
 	contentType := "text/html; charset=utf-8"

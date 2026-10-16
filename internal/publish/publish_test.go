@@ -358,6 +358,31 @@ func TestRunLocalRejectsEmptyAndInvalidUTF8HTML(t *testing.T) {
 	}
 }
 
+// The body rules are usage errors in both modes. Remote mode catches an
+// empty file before the Upload, so it must also report a usage error rather
+// than a step failure.
+func TestRunRemoteRejectsEmptyFileAsUsageError(t *testing.T) {
+	runtime, fileSystem := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com", "PAGES_UPLOAD_TOKEN": "secret"})
+	resolved, err := Resolve(Input{File: "/source/page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := fileSystem.MkdirAll("/source", 0o755); err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	if err := fileSystem.WriteFile("/source/page.html", nil, 0o644); err != nil {
+		t.Fatalf("write empty page file: %v", err)
+	}
+
+	_, err = Run(resolved, runtime)
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("err = %v, want usage error", err)
+	}
+	if want := "page file is empty"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
 func TestRunLocalRefreshFailureReportsPageInPlace(t *testing.T) {
 	runtime, fileSystem := testRuntime(nil)
 	if err := publishExistingPage(t, fileSystem); err != nil {
