@@ -43,9 +43,11 @@ directories in its Identity navigation block.
 
 When Named Identities exist, every Index renders the same Identity navigation
 block first. It lists the Default Identity first, then Named Identity entries;
-the current scope links to itself and other entries use relative URLs. The
-root Default Identity Page list follows this block, so scope navigation stays
-visible when the Default Identity contains many Pages.
+each entry is a name and a link, and the current scope links to itself. No
+entry carries a state label: a reader is already on the current scope, and a
+label adds no information the name does not. The root Default Identity Page
+list follows this block, so scope navigation stays visible when the Default
+Identity contains many Pages.
 
 ## Semantics
 
@@ -92,21 +94,26 @@ next refresh; no migration or manifest repairs it.
 
 The time is rendered as a `<time>` element whose `datetime` attribute carries
 the exact value and whose text carries the reader-facing form. The rendered
-text uses the server's local time zone, the same zone the file modification
-time comes from, so a reader compares the Index against the host without
-converting anything.
+text is minute precision and carries no zone suffix: it is the host's
+wall-clock time, the same value `ls -l` shows, and a suffix would repeat what
+the times already imply. A reader who needs the exact zone reads the
+`datetime` attribute or the Page Record, both of which carry it.
 
 ### Page Record
 
-The Page Record is JSON with one object per scope. It carries `identity`,
-the empty string for the root Record and the Named Identity name otherwise,
-and `pages`, an array of objects with `slug` and `published`. The
-`published` value is the exact Published Time in RFC 3339 form, so a caller
-can order or filter without re-reading the file system.
+The Page Record is JSON with one object per scope. It carries `pages`, an
+array of objects with `slug` and `published`. The `published` value is the
+exact Published Time in RFC 3339 form, so a caller can order or filter
+without re-reading the file system.
 
 The Record lists the same Pages in the same order as its Index. It carries no
 Page content, size, asset list, or Identity navigation. An empty scope
 renders an empty `pages` array, not a message.
+
+The Record names no scope. Its path already says which scope it belongs to,
+and a scope field would repeat the path on every entry. A Record is
+recognized as a pages artifact by its serialized prefix, so a foreign
+`index.json` is never replaced.
 
 A Record and its Index are generated from one scan in one refresh, so they
 cannot disagree about which Pages exist or what order they take.
@@ -176,7 +183,7 @@ The `@bumble` Index links `overview/` to `./overview/` and its parent to
 One root Index entry:
 
 ```text literal
-report/   Page   2026-10-16 21:02   ./report/
+report/   2026-10-16 21:02   ./report/
 ```
 
 The matching root Page Record entry:

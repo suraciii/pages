@@ -22,13 +22,13 @@ const (
 	catalogMarker      = "<!-- pages:page-index -->"
 	catalogRecordName  = "index.json"
 	// catalogRecordMark is the serialized prefix of every Page Record: the
-	// opening brace followed by the identity key. A foreign `index.json`
-	// that happens to carry a `pages` key does not match this prefix, so a
-	// foreign file is preserved instead of being replaced.
-	catalogRecordMark = "{\n  \"identity\": "
+	// opening brace followed by the pages key. A foreign `index.json` that
+	// does not start this way is preserved instead of being replaced.
+	catalogRecordMark = "{\n  \"pages\": ["
 	// publishedTimeLayout is the reader-facing Published Time form. It has
-	// minute precision and the host's local time zone offset.
-	publishedTimeLayout = "2006-01-02 15:04 -07:00"
+	// minute precision and no zone: a reader sees the same wall-clock time
+	// that `ls -l` shows on the server, and a local Index never mixes zones.
+	publishedTimeLayout = "2006-01-02 15:04"
 )
 
 type catalogScope struct {
@@ -189,7 +189,7 @@ func makeCatalogTargets(publicRoot string, scopes []catalogScope) []catalogTarge
 					key:     "root-record",
 					path:    filepath.Join(publicRoot, catalogRecordName),
 					marker:  catalogRecordMark,
-					content: renderScopeRecord("", scope.pages),
+					content: renderScopeRecord(scope.pages),
 				},
 			)
 			continue
@@ -205,7 +205,7 @@ func makeCatalogTargets(publicRoot string, scopes []catalogScope) []catalogTarge
 				key:     "record-identity-" + scope.identity,
 				path:    filepath.Join(publicRoot, IdentityScope(scope.identity), catalogRecordName),
 				marker:  catalogRecordMark,
-				content: renderScopeRecord(scope.identity, scope.pages),
+				content: renderScopeRecord(scope.pages),
 			},
 		)
 	}
@@ -239,12 +239,11 @@ func renderIdentityIndex(identity string, pages []catalogPage, identities []cata
 }
 
 // renderScopeRecord renders the Page Record for one scope. The Record
-// carries the same Pages in the same order as its Index.
-func renderScopeRecord(identity string, pages []catalogPage) []byte {
+// carries the same Pages in the same order as its Index. It names no scope:
+// the file path already says which scope it belongs to.
+func renderScopeRecord(pages []catalogPage) []byte {
 	var body bytes.Buffer
-	body.WriteString("{\n  \"identity\": ")
-	body.WriteString(strconv.Quote(identity))
-	body.WriteString(",\n  \"pages\": [")
+	body.WriteString("{\n  \"pages\": [")
 	for index, page := range pages {
 		if index > 0 {
 			body.WriteString(",")
@@ -262,29 +261,26 @@ func renderScopeRecord(identity string, pages []catalogPage) []byte {
 	return body.Bytes()
 }
 
+// writeIdentityNavigation lists the scopes a reader can jump to. Each entry
+// is a name and a link; the current scope is not labeled, because a reader
+// is already on it.
 func writeIdentityNavigation(body *bytes.Buffer, currentIdentity string, identities []catalogScope) {
 	body.WriteString("<nav aria-label=\"Identity navigation\"><ul>\n")
 	defaultHref := "./"
 	if currentIdentity != "" {
 		defaultHref = "../"
 	}
-	defaultKind := "Default Identity"
-	if currentIdentity == "" {
-		defaultKind = "Current"
-	}
-	writeListItem(body, "Default Identity", defaultKind, defaultHref)
+	writeListItem(body, "Default Identity", defaultHref)
 	for _, identity := range identities {
 		name := "@" + identity.identity + "/"
 		href := "./" + IdentityScope(identity.identity) + "/"
 		if currentIdentity != "" {
 			href = "../" + IdentityScope(identity.identity) + "/"
 		}
-		kind := "Named Identity"
 		if identity.identity == currentIdentity {
 			href = "./"
-			kind = "Current"
 		}
-		writeListItem(body, name, kind, href)
+		writeListItem(body, name, href)
 	}
 	body.WriteString("</ul></nav>\n")
 }
@@ -348,17 +344,15 @@ func writePageListItem(body *bytes.Buffer, page catalogPage, href string) {
 	body.WriteString(html.EscapeString(page.modTime.Format(time.RFC3339)))
 	body.WriteString("\">")
 	body.WriteString(html.EscapeString(published))
-	body.WriteString("</time><span>Page</span></li>\n")
+	body.WriteString("</time></li>\n")
 }
 
-func writeListItem(body *bytes.Buffer, name, kind, href string) {
+func writeListItem(body *bytes.Buffer, name, href string) {
 	body.WriteString("<li><a href=\"")
 	body.WriteString(html.EscapeString(href))
 	body.WriteString("\">")
 	body.WriteString(html.EscapeString(name))
-	body.WriteString("</a><span>")
-	body.WriteString(html.EscapeString(kind))
-	body.WriteString("</span></li>\n")
+	body.WriteString("</a></li>\n")
 }
 
 func writeCatalog(target catalogTarget, stagingDir string, fileSystem filesystem.FS) error {

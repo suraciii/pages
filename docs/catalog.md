@@ -13,19 +13,18 @@ when Named Identities exist, provides the same Identity navigation:
 ```text literal
 Pages
 
-Default Identity   Current   /
-@bumble/           Named Identity   /@bumble/
+Default Identity   /
+@bumble/           /@bumble/
 
 Default Identity
 
-status/       Page   2026-10-16 21:02   /status/
-report/       Page   2026-10-16 14:35   /report/
+status/       2026-10-16 21:02   /status/
+report/       2026-10-16 14:35   /report/
 ```
 
 An Identity Index lists only the Pages in that Identity and includes the
-Identity navigation plus a link to its parent Index. The current Identity is
-marked `Current`. A Page link opens the Page at its trailing-slash URL. The
-Index does not list files inside a Page.
+Identity navigation plus a link to its parent Index. A Page link opens the
+Page at its trailing-slash URL. The Index does not list files inside a Page.
 
 ## Page Record
 
@@ -36,7 +35,6 @@ read the current Pages without parsing HTML:
 
 ```text literal
 {
-  "identity": "",
   "pages": [
     {"slug": "status", "published": "2026-10-16T21:02:13+08:00"},
     {"slug": "report", "published": "2026-10-16T14:35:00+08:00"}
@@ -46,9 +44,8 @@ read the current Pages without parsing HTML:
 
 A Page Record lists the Pages in one scope only, in the same order as its
 Index. The `published` value is the exact Published Time in RFC 3339 form.
-`identity` is the empty string for the root Record and the Named Identity
-name for an Identity Record. A Page Record has no field for Page content,
-size, or assets.
+A Page Record has no field for Page content, size, or assets. It names no
+scope: the file path already says which scope it belongs to.
 
 ## Rules
 
@@ -65,9 +62,11 @@ size, or assets.
   time. Equal times use Slug order. Existing Pages use their current file
   times.
 - Every Page entry shows its Published Time, the same `index.html`
-  modification time that orders the list. The time is shown to the minute,
-  in the host's local time zone, and matches what `ls -l` reports for the
-  Page directory.
+  modification time that orders the list. The time is shown to the minute
+  and matches what `ls -l` reports for the Page directory. The displayed
+  value carries no zone: a reader browsing the host's Index reads the host's
+  wall-clock time, so a zone suffix repeats what the times already imply. The
+  machine-readable value in the Page Record carries the exact zone.
 - Named Identity entries use lexicographic order.
 - The Index uses relative links so a URL path prefix remains valid.
 - An empty Index states that no Page is published in that scope.

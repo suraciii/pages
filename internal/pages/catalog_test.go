@@ -68,13 +68,12 @@ func TestRefreshIndexesShowsPublishedTimeNextToEachPage(t *testing.T) {
 	assertContainsInOrder(t, root,
 		`href="./alpha/">alpha/</a>`,
 		`datetime="2026-10-16T21:02:13+08:00"`,
-		`2026-10-16 21:02 +08:00`,
-		`<span>Page</span>`)
+		`2026-10-16 21:02</time>`)
 	identity := readCatalog(t, fileSystem, filepath.Join(publicRoot, "@bumble", "index.html"))
 	assertContainsInOrder(t, identity,
 		`href="./overview/">overview/</a>`,
 		`datetime="2026-10-15T09:41:00+08:00"`,
-		`2026-10-15 09:41 +08:00`)
+		`2026-10-15 09:41</time>`)
 }
 
 func TestRefreshIndexesWritesPageRecordWithSameEntriesAsIndex(t *testing.T) {
@@ -94,12 +93,12 @@ func TestRefreshIndexesWritesPageRecordWithSameEntriesAsIndex(t *testing.T) {
 		t.Fatalf("refresh indexes: %v", err)
 	}
 	rootRecord := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.json"))
-	wantRoot := "{\n  \"identity\": \"\",\n  \"pages\": [\n    {\"slug\": \"alpha\", \"published\": \"2026-10-16T21:02:13+08:00\"}\n  ]\n}\n"
+	wantRoot := "{\n  \"pages\": [\n    {\"slug\": \"alpha\", \"published\": \"2026-10-16T21:02:13+08:00\"}\n  ]\n}\n"
 	if rootRecord != wantRoot {
 		t.Fatalf("root record = %q, want %q", rootRecord, wantRoot)
 	}
 	identityRecord := readCatalog(t, fileSystem, filepath.Join(publicRoot, "@bumble", "index.json"))
-	wantIdentity := "{\n  \"identity\": \"bumble\",\n  \"pages\": [\n    {\"slug\": \"overview\", \"published\": \"2026-10-15T09:41:00+08:00\"}\n  ]\n}\n"
+	wantIdentity := "{\n  \"pages\": [\n    {\"slug\": \"overview\", \"published\": \"2026-10-15T09:41:00+08:00\"}\n  ]\n}\n"
 	if identityRecord != wantIdentity {
 		t.Fatalf("identity record = %q, want %q", identityRecord, wantIdentity)
 	}
@@ -134,7 +133,7 @@ func TestRefreshIndexesRecordForEmptyScope(t *testing.T) {
 		t.Fatalf("refresh indexes: %v", err)
 	}
 	record := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.json"))
-	want := "{\n  \"identity\": \"\",\n  \"pages\": []\n}\n"
+	want := "{\n  \"pages\": []\n}\n"
 	if record != want {
 		t.Fatalf("empty record = %q, want %q", record, want)
 	}
@@ -198,7 +197,7 @@ func TestRefreshIndexesRecoversInterruptedRecordReplacement(t *testing.T) {
 	if err := fileSystem.MkdirAll(staging, 0o700); err != nil {
 		t.Fatalf("create catalog staging: %v", err)
 	}
-	mustWriteMemoryFile(t, fileSystem, filepath.Join(staging, "old-deadbeefdeadbeef-root-record"), "{\n  \"identity\": \"\",\n  \"pages\": []\n}\n")
+	mustWriteMemoryFile(t, fileSystem, filepath.Join(staging, "old-deadbeefdeadbeef-root-record"), "{\n  \"pages\": []\n}\n")
 
 	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
 		t.Fatalf("refresh indexes: %v", err)
@@ -224,7 +223,7 @@ func TestRefreshIndexesRecordRecoveryTargetsNamedIdentity(t *testing.T) {
 	if err := fileSystem.MkdirAll(staging, 0o700); err != nil {
 		t.Fatalf("create catalog staging: %v", err)
 	}
-	parked := "{\n  \"identity\": \"bumble\",\n  \"pages\": [\n    {\"slug\": \"parked\", \"published\": \"2026-10-01T10:00:00+08:00\"}\n  ]\n}\n"
+	parked := "{\n  \"pages\": [\n    {\"slug\": \"parked\", \"published\": \"2026-10-01T10:00:00+08:00\"}\n  ]\n}\n"
 	mustWriteMemoryFile(t, fileSystem, filepath.Join(staging, "old-deadbeefdeadbeef-record-identity-bumble"), parked)
 	if err := fileSystem.Remove(filepath.Join(publicRoot, "@bumble", "index.json")); err != nil {
 		t.Fatalf("remove identity record: %v", err)
