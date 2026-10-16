@@ -395,6 +395,61 @@ func TestNewServerRefreshesExistingPages(t *testing.T) {
 	}
 }
 
+// A refresh whose output is byte-identical to the artifact on disk writes
+// nothing: no rename reaches the target, so the artifact keeps its inode and
+// a reader never sees a needless rewrite.
+func TestRefreshIndexesSkipsByteIdenticalArtifacts(t *testing.T) {
+	stager, fileSystem, publicRoot := newMemoryStager(t)
+	publishStagedHTML(t, stager, "", "report", "report")
+	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+		t.Fatalf("initial refresh: %v", err)
+	}
+	counting := &renameCountingFS{FS: fileSystem}
+	if err := RefreshIndexes(publicRoot, counting); err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	if counting.renames != 0 {
+		t.Fatalf("second refresh performed %d renames, want 0", counting.renames)
+	}
+	entries, err := fileSystem.ReadDir(filepath.Join(publicRoot, ".pages", catalogStagingName))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("read catalog staging: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("staging holds %d entries after an unchanged refresh", len(entries))
+	}
+}
+
+// A refresh that changes the Page set still replaces the artifact.
+func TestRefreshIndexesReplacesChangedArtifact(t *testing.T) {
+	stager, fileSystem, publicRoot := newMemoryStager(t)
+	publishStagedHTML(t, stager, "", "report", "report")
+	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+		t.Fatalf("initial refresh: %v", err)
+	}
+	counting := &renameCountingFS{FS: fileSystem}
+	publishStagedHTML(t, stager, "", "later", "later")
+	if err := RefreshIndexes(publicRoot, counting); err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	if counting.renames == 0 {
+		t.Fatal("second refresh replaced nothing, want a rename")
+	}
+	if index := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html")); !strings.Contains(index, `href="./later/"`) {
+		t.Fatalf("index does not list the new page: %s", index)
+	}
+}
+
+type renameCountingFS struct {
+	filesystem.FS
+	renames int
+}
+
+func (fileSystem *renameCountingFS) Rename(oldPath, newPath string) error {
+	fileSystem.renames++
+	return fileSystem.FS.Rename(oldPath, newPath)
+}
+
 func TestServerRefreshesPageIndexAfterUpload(t *testing.T) {
 	server, publicRoot := newTestServer(t, Tokens{Token: "secret"}, 1024)
 	if response := publishRequest(t, server, "report", "secret", []byte("page")); response.Code != 204 {

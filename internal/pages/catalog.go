@@ -362,6 +362,14 @@ func writeListItem(body *bytes.Buffer, name, kind, href string) {
 }
 
 func writeCatalog(target catalogTarget, stagingDir string, fileSystem filesystem.FS) error {
+	// A refresh that produces byte-identical output writes nothing: the
+	// artifact keeps its inode, so a reader never sees a needless rewrite
+	// and a concurrent reader cannot observe a missing file.
+	if existing, err := fileSystem.ReadFile(target.path); err == nil && bytes.Equal(existing, target.content) {
+		return nil
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("inspect existing catalog %q: %w", target.path, err)
+	}
 	temporary, err := fileSystem.CreateTemp(stagingDir, "new-*.html")
 	if err != nil {
 		return fmt.Errorf("create catalog staging file: %w", err)
