@@ -23,6 +23,8 @@ show runnable examples and link here for the exact contract.
 - The product surface stays minimal: exactly three action verbs. Token
   listing, token deletion, and page listing are not part of the contract and
   get no verbs. `skill` is read-only CLI metadata, not a product action.
+  Reading the current Pages is a static-host read: the Page Index serves
+  readers and the Page Record serves programs. Neither needs a verb.
 - Version-matched agent instructions. The distributed bootstrap skill only
   finds or installs the CLI. The CLI owns the complete operational skill, so
   command changes cannot leave an installed skill behind.
@@ -44,6 +46,10 @@ Rejected alternatives:
 - Separate local and remote target parameters. Rejected: two mutually
   exclusive parameters expose the execution mode as another user decision.
   One Destination value contains all required information.
+- A `--file -` standard-input form. Rejected: a zip Upload needs a reader
+  that supports random access, so the form would work for HTML and fail for
+  zip. One input channel for both shapes keeps the contract uniform. A
+  caller that generates content writes a file first.
 
 ## Model
 
@@ -217,27 +223,64 @@ Local mode (the Destination is a local path):
   starts and prints the resulting absolute Page directory.
 - The CLI does not lock. Two concurrent local publishes of the same
   slug are the caller's responsibility.
+- Local mode applies the same body rules as remote mode: an empty file and a
+  file that is not valid UTF-8 are usage errors. The size limit is the one
+  rule that differs, because the caller already owns the directory and a
+  limit adds no security there.
+- Local mode refreshes the Page Index and the Page Record after the swap. A
+  refresh failure is reported and exits 1 while the Page stays in place.
 
 Common steps:
 
 1. Resolve the inputs with the table above. A resolved value that fails
    validation is a usage error.
-2. `--file` ends in `.html` or `.zip`. A `.html` file uploads as
-   `text/html` and a `.zip` file as `application/zip`. A directory is
-   rejected with a usage error: package it as a zip first.
-3. Remote mode: `POST <url>/<slug>` with the Bearer Token and the content type
+2. `--file` names one existing regular file that ends in `.html` or `.zip`.
+   A `.html` file uploads as `text/html` and a `.zip` file as
+   `application/zip`. A directory is rejected with a usage error that says to
+   package it as a zip. The check order is: missing `--file`, unsupported
+   extension, then directory.
+3. The `--slug` value must be a valid Slug: at most 63 lowercase letters,
+   digits, or hyphens, and it starts with a letter or digit. An invalid value
+   is a usage error.
+4. The file must not be empty and its bytes must be valid UTF-8. Both modes
+   apply these two rules. An empty file or invalid UTF-8 is a usage error and
+   must not change the existing Page.
+5. Remote mode: `POST <url>/<slug>` with the Bearer Token and the content type
    of the file. Expect `204`. Then `GET <url>/<slug>/` for the Default Identity
    or `GET <url>/@<identity>/<slug>/` for a Named Identity. Expect `200` with
    an HTML content type.
-4. Local mode: stage the file under `<dir>/.pages/`, run the validation, and
+6. Local mode: stage the file under `<dir>/.pages/`, run the validation, and
    swap it into `<dir>/<slug>/` or `<dir>/@<identity>/<slug>/`. A successful
    swap is the Verification.
-5. Remote mode prints the public URL with a trailing slash. Local mode prints
+7. Refresh the Page Index and the Page Record.
+8. Remote mode prints the public URL with a trailing slash. Local mode prints
    the absolute Page directory with the operating system's trailing path
    separator. Both print exactly one line and exit 0.
 
 Any step failure prints one error line to stderr and exits 1. Usage errors
 exit 2.
+
+### Failure after the effect
+
+Two steps can fail after the Page is already in place:
+
+- Remote mode: the Upload returned `204` but the verification `GET` failed.
+  The error line reports the verification result. The Page is live; the
+  static host is the likely cause. The error must not claim the Page is
+  absent.
+- Local mode: the swap succeeded but the refresh failed. The error line
+  reports the refresh failure. The Page is live; a non-Page-Index file at
+  `index.html` or `index.json` is the likely cause.
+
+Both cases exit 1. The caller checks the printed Page path or URL before it
+publishes again. Publishing the same Slug again replaces the Page, so a
+repeat after a timeout is safe and cannot create a second Page.
+
+### Input channel
+
+`publish` reads its Page content from the file that `--file` names. It does
+not read standard input: a zip Upload needs a reader that supports random
+access, and one input channel for both shapes keeps the contract uniform.
 
 ### pages generate-token
 

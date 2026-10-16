@@ -9,7 +9,8 @@ one concept.
 **Page**:
 One published resource tree under a Slug and, optionally, a Named Identity.
 The root file is `index.html`. A Page is one standalone HTML document or a
-directory of files from a zip.
+directory of files from a zip. A Page may contain same-origin scripts,
+stylesheets, images, and data files. pages never executes them.
 _Avoid_: file, article, site, document
 
 **Identity**:
@@ -59,14 +60,21 @@ _Avoid_: webroot, docroot
 **Page Index**:
 A generated static navigation document at the Public Root or inside one
 Named Identity. It links to current Pages and Identity scopes. It shows the
-Published Time of each Page. It is not a Page, an Upload target, or an
-access-control boundary.
+Published Time of each Page. It is a system artifact: pages replaces it on
+every refresh, so a manual edit to it is lost. It is not a Page, an Upload
+target, or an access-control boundary.
 _Avoid_: catalog, directory listing
 
 **Published Time**:
 The modification time of a Page's root `index.html`, shown in the Page Index.
 It is the ordering basis for the Page list. It is not a recorded event time.
 _Avoid_: upload time, timestamp
+
+**Page Record**:
+The machine-readable Page Index. It carries the same Page entries as the Page
+Index in a structured form for programmatic callers. It is a system artifact
+with the same replacement rules as the Page Index.
+_Avoid_: manifest, API response, listing
 
 **Staging Area**:
 The `.pages/` directory inside the Public Root. The server unpacks a new

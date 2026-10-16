@@ -29,6 +29,13 @@ start a process, or use an external service.
   `charset=utf-8`, parameter-free zip, and rejection of every other parameter.
 - Rejected HTML Upload tests assert that the existing Page and staging area
   are unchanged.
+- Local Publish validation tests cover an empty file and a file that is not
+  valid UTF-8. Both are usage errors and must leave the existing Page
+  unchanged, matching the remote-mode rule.
+- Failure-after-effect tests cover the two partial cases. A verification
+  failure after a `204` reports the failure while the Page stays in place. A
+  Page Index refresh failure after a successful swap reports the failure
+  while the Page stays in place. Neither case may claim the Page is absent.
 - Swap tests cover: first publish, replace of a directory page, the
   replacement of a zip Page with a single-file Page, the brief-absence window
   is not asserted but the end state is, Public Root and final Page directories
@@ -51,6 +58,12 @@ start a process, or use an external service.
   current-scope links, the Published Time rendered next to each Page link, and
   refresh after local and server Publish.
   File times are supplied by an in-memory file-system test dependency.
+- Page Record tests cover the `identity` field for the root and a Named
+  Identity scope, the `slug` and `published` fields with the exact RFC 3339
+  value, the same order and membership as the Index of the same scope, the
+  empty `pages` array for an empty scope, and refusal to replace an existing
+  `index.json` that is not a Page Record. A Record and its Index are read
+  from one refresh and compared.
 - Size limits must stay configurable through `ServerConfig` so tests do not
   wait on real time or allocate large resources.
 - Tests must not use `t.TempDir`, `os.CreateTemp`, physical file paths,

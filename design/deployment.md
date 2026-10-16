@@ -12,8 +12,10 @@ any static file server works. pages does not require any specific host.
   to the host.
 - Publish verification must prove what a reader sees: the `GET` must
   travel the same public route a reader uses.
-- Published pages come from agents and are untrusted. The public read
-  path must not execute scripts.
+- Published pages come from agents and are untrusted. The host decides which
+  scripts a Page may run. pages never executes Page content and never
+  generates a script, so the host's Content Security Policy is the only
+  control over Page scripts.
 
 ## Model
 
@@ -92,6 +94,10 @@ root * /srv/pages/public
 file_server
 ```
 
+A deployment that publishes interactive Pages replaces
+`default-src 'none'` with `default-src 'none'; script-src 'self'`, or adds a
+per-Page `sha256-` value. The rest of the policy is unchanged.
+
 ## Semantics
 
 - Only `POST` reaches the server. Every other method goes to the
@@ -103,11 +109,15 @@ file_server
   enforces it for the loopback hop. Operators change both together.
 - The static host root and `pages serve --destination` must name the same
   Public Root.
-- The CSP header blocks script execution: pages are static display
-  documents, never interactive applications. `style-src 'self'` allows
-  stylesheets from a zip page; `img-src 'self' data:` allows bundled
-  images; `'unsafe-inline'` keeps inline styles working in single-file
-  pages.
+- The CSP header is the only control over Page scripts. A Page may contain
+  same-origin scripts, and pages never executes them and never generates
+  one. The reference policy uses `default-src 'none'`, which blocks all
+  scripts. An operator who publishes interactive Pages relaxes it: add
+  `script-src 'self'` for same-origin script files, or a `sha256-` value per
+  Page for one inline script. The Page Index and Page Record carry no script
+  and need no exception. `style-src 'self' 'unsafe-inline'` allows
+  stylesheets from a zip page and keeps inline styles working in
+  single-file pages; `img-src 'self' data:` allows bundled images.
 - `Cache-Control: no-store` follows from latest-only semantics: the same
   slug is replaced in place, so a cached copy would go stale after the
   next publish.
