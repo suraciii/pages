@@ -19,6 +19,9 @@ const (
 	catalogStagingName = "catalog-staging"
 	catalogLockName    = "catalog.lock"
 	catalogMarker      = "<!-- pages:page-index -->"
+	// publishedTimeLayout is the reader-facing Published Time form. It has
+	// minute precision and the host's local time zone offset.
+	publishedTimeLayout = "2006-01-02 15:04 -07:00"
 )
 
 type catalogScope struct {
@@ -242,7 +245,7 @@ func writeDocumentStart(body *bytes.Buffer, title, heading string) {
 	body.WriteString("<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	body.WriteString("<title>")
 	body.WriteString(html.EscapeString(title))
-	body.WriteString("</title>\n<style>body{font:16px system-ui,sans-serif;line-height:1.5;max-width:52rem;margin:3rem auto;padding:0 1rem;color:#202124}a{color:#1257a6;text-decoration:none}a:hover{text-decoration:underline}ul{list-style:none;padding:0;border-top:1px solid #d9d9d9}li{display:flex;gap:1rem;padding:.65rem 0;border-bottom:1px solid #d9d9d9}li a{flex:1}li span{color:#6b7280;font-size:.9rem}nav{color:#6b7280;margin-bottom:1.5rem}h1{font-size:2rem;font-weight:600}h2{font-size:1.1rem;margin-top:2rem}</style>\n")
+	body.WriteString("</title>\n<style>body{font:16px system-ui,sans-serif;line-height:1.5;max-width:52rem;margin:3rem auto;padding:0 1rem;color:#202124}a{color:#1257a6;text-decoration:none}a:hover{text-decoration:underline}ul{list-style:none;padding:0;border-top:1px solid #d9d9d9}li{display:flex;gap:1rem;padding:.65rem 0;border-bottom:1px solid #d9d9d9}li a{flex:1}li span{color:#6b7280;font-size:.9rem}li time{color:#6b7280;font-size:.9rem;font-variant-numeric:tabular-nums}nav{color:#6b7280;margin-bottom:1.5rem}h1{font-size:2rem;font-weight:600}h2{font-size:1.1rem;margin-top:2rem}</style>\n")
 	body.WriteString("</head>\n<body>\n<main>\n<h1>")
 	body.WriteString(html.EscapeString(heading))
 	body.WriteString("</h1>\n")
@@ -280,9 +283,22 @@ func writePageList(body *bytes.Buffer, heading string, pages []catalogPage, pref
 	}
 	body.WriteString("<ul>\n")
 	for _, page := range pages {
-		writeListItem(body, page.slug+"/", "Page", prefix+page.slug+"/")
+		writePageListItem(body, page, prefix+page.slug+"/")
 	}
 	body.WriteString("</ul>\n</section>\n")
+}
+
+func writePageListItem(body *bytes.Buffer, page catalogPage, href string) {
+	published := page.modTime.Format(publishedTimeLayout)
+	body.WriteString("<li><a href=\"")
+	body.WriteString(html.EscapeString(href))
+	body.WriteString("\">")
+	body.WriteString(html.EscapeString(page.slug + "/"))
+	body.WriteString("</a><time datetime=\"")
+	body.WriteString(html.EscapeString(page.modTime.Format(time.RFC3339)))
+	body.WriteString("\">")
+	body.WriteString(html.EscapeString(published))
+	body.WriteString("</time><span>Page</span></li>\n")
 }
 
 func writeListItem(body *bytes.Buffer, name, kind, href string) {

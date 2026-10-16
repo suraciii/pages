@@ -18,8 +18,8 @@ Default Identity   Current   /
 
 Default Identity
 
-report/       Page       /report/
-status/       Page       /status/
+status/       Page   2026-10-16 21:02   /status/
+report/       Page   2026-10-16 14:35   /report/
 ```
 
 An Identity Index lists only the Pages in that Identity and includes the
@@ -41,11 +41,15 @@ Index does not list files inside a Page.
   modification time. Publishing again moves a Page according to its new
   time. Equal times use Slug order. Existing Pages use their current file
   times.
+- Every Page entry shows its Published Time, the same `index.html`
+  modification time that orders the list. The time is shown to the minute,
+  in the host's local time zone, and matches what `ls -l` reports for the
+  Page directory.
 - Named Identity entries use lexicographic order.
 - The Index uses relative links so a URL path prefix remains valid.
 - An empty Index states that no Page is published in that scope.
-- The Index contains no scripts, external assets, timestamps, versions, tags,
-  search, or history.
+- The Index contains no scripts, external assets, versions, tags, search, or
+  history. It shows the Published Time of each Page and nothing else about it.
 - The Index is public wherever the Public Root is public. It must not be
   treated as an access-control boundary.
 

@@ -7,7 +7,7 @@ Minimal static Page publishing. One Go command has three product actions:
 - `pages publish` publishes one HTML file or zip file and prints its public
   URL or local Page directory.
 - The Public Root includes a generated Page Index so readers can browse the
-  currently published Pages.
+  currently published Pages and see when each Page was published.
 - `pages generate-token` issues a Token for the Default or one Named Identity.
 
 `pages skill` prints version-matched instructions for agents.

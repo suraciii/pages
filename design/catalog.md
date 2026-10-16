@@ -10,6 +10,9 @@
   the existing Public Root staging boundary.
 - The output must remain valid under the reference Content Security Policy and
   must not execute Page-provided code.
+- A reader must be able to tell which Page was published most recently without
+  reading a separate manifest. The Index shows the Published Time of each Page
+  and uses the same value for the list order.
 - The first version must stay small. It has no public API, CLI command,
   metadata model, or customization surface.
 
@@ -58,7 +61,30 @@ Links are relative to the Index location and end in `/`. Names are HTML-escaped
 before they are written.
 
 The generated document is plain HTML with a small inline style. It contains
-no script, external resource, user-provided title, timestamp, or metadata.
+no script, external resource, or user-provided title.
+
+### Published Time
+
+Every Page entry shows its Published Time next to the Slug link. The Page
+Index orders Pages by the same value, so the reader sees the list order and
+each time agree.
+
+Published Time is the Page root `index.html` modification time. The renderer
+never converts to UTC and never invents a zone: a reader sees the same
+wall-clock time that `ls -l` shows on the server. The value has minute
+precision, because a file modification time carries nanoseconds that no
+reader can act on.
+
+Published Time is a display value, not a contract. Pages that a different tool
+wrote before this feature existed keep their current file times. A Page whose
+file time changes outside Publish shows a different Published Time after the
+next refresh; no migration or manifest repairs it.
+
+The time is rendered as a `<time>` element whose `datetime` attribute carries
+the exact value and whose text carries the reader-facing form. The rendered
+text uses the server's local time zone, the same zone the file modification
+time comes from, so a reader compares the Index against the host without
+converting anything.
 
 ### Refresh
 
@@ -103,6 +129,12 @@ The Index does not expose Page assets or any token/configuration state.
 The root Index links `report/` to `./report/` and `@bumble/` to `./@bumble/`.
 The `@bumble` Index links `overview/` to `./overview/` and its parent to
 `../`.
+
+One root Index entry:
+
+```text literal
+report/   Page   2026-10-16 21:02   ./report/
+```
 
 ## Status
 

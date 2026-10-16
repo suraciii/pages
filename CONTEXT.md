@@ -58,9 +58,15 @@ _Avoid_: webroot, docroot
 
 **Page Index**:
 A generated static navigation document at the Public Root or inside one
-Named Identity. It links to current Pages and Identity scopes. It is not a
-Page, an Upload target, or an access-control boundary.
+Named Identity. It links to current Pages and Identity scopes. It shows the
+Published Time of each Page. It is not a Page, an Upload target, or an
+access-control boundary.
 _Avoid_: catalog, directory listing
+
+**Published Time**:
+The modification time of a Page's root `index.html`, shown in the Page Index.
+It is the ordering basis for the Page list. It is not a recorded event time.
+_Avoid_: upload time, timestamp
 
 **Staging Area**:
 The `.pages/` directory inside the Public Root. The server unpacks a new

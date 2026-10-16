@@ -46,6 +46,37 @@ func TestRefreshIndexesListsPagesAndIdentities(t *testing.T) {
 		`href="./overview/"`)
 }
 
+func TestRefreshIndexesShowsPublishedTimeNextToEachPage(t *testing.T) {
+	stager, memory, publicRoot := newMemoryStager(t)
+	publishStagedHTML(t, stager, "", "alpha", "alpha")
+	publishStagedHTML(t, stager, "bumble", "overview", "overview")
+	zone := time.FixedZone("UTC+8", 8*60*60)
+	alphaTime := time.Date(2026, 10, 16, 21, 2, 13, 0, zone)
+	overviewTime := time.Date(2026, 10, 15, 9, 41, 0, 0, zone)
+	fileSystem := catalogTimeFS{
+		FS: memory,
+		times: map[string]time.Time{
+			filepath.Join(publicRoot, "alpha", "index.html"):               alphaTime,
+			filepath.Join(publicRoot, "@bumble", "overview", "index.html"): overviewTime,
+		},
+	}
+
+	if err := RefreshIndexes(publicRoot, fileSystem); err != nil {
+		t.Fatalf("refresh indexes: %v", err)
+	}
+	root := readCatalog(t, fileSystem, filepath.Join(publicRoot, "index.html"))
+	assertContainsInOrder(t, root,
+		`href="./alpha/">alpha/</a>`,
+		`datetime="2026-10-16T21:02:13+08:00"`,
+		`2026-10-16 21:02 +08:00`,
+		`<span>Page</span>`)
+	identity := readCatalog(t, fileSystem, filepath.Join(publicRoot, "@bumble", "index.html"))
+	assertContainsInOrder(t, identity,
+		`href="./overview/">overview/</a>`,
+		`datetime="2026-10-15T09:41:00+08:00"`,
+		`2026-10-15 09:41 +08:00`)
+}
+
 func TestRefreshIndexesOrdersPagesByPublishedFileTime(t *testing.T) {
 	for _, scope := range []struct {
 		name     string
