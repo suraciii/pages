@@ -17,15 +17,15 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  pages publish            publish one page")
 	fmt.Fprintln(writer, "  pages generate-token [identity]")
 	fmt.Fprintln(writer, "                           issue an upload token")
-	fmt.Fprintln(writer, "  pages skill              print agent instructions")
 	fmt.Fprintln(writer, "  pages --version          print version")
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Run \"pages <command> --help\" for command flags.")
 }
 
 // subcommandUsage reports one subcommand line and its flags with the
-// long-form double-dash style.
-func subcommandUsage(flags *flag.FlagSet, format string, args ...any) func() {
+// long-form double-dash style. The optional notes carry the method guidance
+// that belongs with the command rather than in a separate document.
+func subcommandUsage(flags *flag.FlagSet, format string, notes string, args ...any) func() {
 	return func() {
 		fmt.Fprintf(flags.Output(), format+"\n", args...)
 		flags.VisitAll(func(item *flag.Flag) {
@@ -35,6 +35,9 @@ func subcommandUsage(flags *flag.FlagSet, format string, args ...any) func() {
 			}
 			fmt.Fprintf(flags.Output(), "  --%s  %s%s\n", item.Name, item.Usage, defaultValue)
 		})
+		if notes != "" {
+			fmt.Fprint(flags.Output(), notes)
+		}
 	}
 }
 

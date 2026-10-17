@@ -23,7 +23,7 @@ const (
 
 func runServe(args []string, runtime commandRuntime) int {
 	flags := flag.NewFlagSet("pages serve", flag.ContinueOnError)
-	flags.Usage = subcommandUsage(flags, "Usage: pages serve [flags]")
+	flags.Usage = subcommandUsage(flags, "Usage: pages serve [flags]", "")
 	listenAddress := flags.String("listen", envOr(runtime.environment, "PAGES_LISTEN_ADDR", "127.0.0.1:3103"), "loopback listen address")
 	destinationValue := destinationFlags(flags)
 	configDir := flags.String("config-dir", runtime.environment("PAGES_CONFIG_DIR"), "configuration directory")

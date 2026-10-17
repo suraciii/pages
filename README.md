@@ -10,7 +10,8 @@ Minimal static Page publishing. One Go command has three product actions:
   currently published Pages and see when each Page was published.
 - `pages generate-token` issues a Token for the Default or one Named Identity.
 
-`pages skill` prints version-matched instructions for agents.
+`pages publish --help` prints the mode, Identity, and recovery guidance along
+with its flags.
 
 pages keeps no publication archive, revision history, rollback state, or
 database.
@@ -134,8 +135,6 @@ Destination syntax, defaults, and input precedence.
 
 ## Documentation
 
-- [Agent documentation catalog](llms.txt): The `llms.txt` map of this
-  repository's documentation for an agent.
 - [Getting Started](docs/getting-started.md) sets up remote Publish from
   install to a live Page.
 - [Publishing](docs/publishing.md) defines the Publish contract and limits.
@@ -149,21 +148,13 @@ Destination syntax, defaults, and input precedence.
   boundary.
 - [Design Index](design/README.md) links every design specification.
 
-## Agent Skill
+## Agent use
 
-The [pages skill](skills/pages/SKILL.md) is a stable bootstrap. It installs or
-finds the CLI, then reads the complete version-matched skill from
-`pages skill`. From a repository checkout, install the bootstrap into the
-agent skill directory:
-
-```text literal
-mkdir -p ~/.agents/skills
-cp -r skills/pages ~/.agents/skills/
-```
-
-The bootstrap is one file and does not copy operational command syntax. CLI
-updates automatically provide their matching instructions through
-`pages skill`; the bootstrap does not need to be copied again.
+`pages publish --help` carries the method guidance an agent needs: which mode
+to choose, what each mode requires, how to check the result, and what to do
+when a Token or Identity is missing. The help is part of the binary, so it
+always matches the installed version. The authoritative command contract is
+[design/cli.md](design/cli.md).
 
 ## Development
 

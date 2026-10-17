@@ -10,9 +10,56 @@ import (
 	"github.com/suraciii/pages/internal/publish"
 )
 
+// publishUsageNotes is the method guidance an agent or operator reads from
+// `pages publish --help`. It answers the four questions the command alone
+// cannot: which mode to choose, what each mode needs, how to check the
+// result, and what to do when a Token or Identity is missing. It states the
+// contract revision it was checked against.
+const publishUsageNotes = `
+Mode
+  A local --dest path writes into a public root you own. No Token, no
+  Identity, no service, no network. An absolute HTTP(S) --dest URL
+  uploads through a service and verifies the public URL.
+
+Recommended path
+  Local:
+    pages publish --file report.html --slug report --dest public
+    public/report/
+  Remote, a Token in the process environment, never on the command line:
+    PAGES_UPLOAD_TOKEN=bumble.sek pages publish --file report.html --slug report \
+      --dest https://pages.example.com
+    https://pages.example.com/@bumble/report/
+
+Identity
+  Local mode needs no Token and no Identity. It never reads
+  PAGES_UPLOAD_TOKEN; --identity only chooses the output directory.
+  Remote mode needs a Token. A Token with no dot selects the Default
+  Identity, whose URL has no @ segment. A Token in identity.secret form
+  selects that Named Identity by itself, so do not also pass --identity.
+  When PAGES_UPLOAD_TOKEN is set it decides the scope, and --identity must
+  not name a different one: that combination is a usage error that exits 2
+  and publishes nothing.
+
+Result check
+  Exit 0 and exactly one printed line: the Page directory in local mode, the
+  verified public URL in remote mode. Any other exit is a failure.
+
+Recovery
+  A usage error exits 2 and its message names the input to fix. Publishing
+  the same Slug again replaces the Page, so a repeat after a timeout is safe.
+  Two failures happen after the Page is already in place, and the Page stays
+  live in both:
+    verify page: ... the page is in place at <url>; check the static host
+    refresh page index: ... the page is in place at <dir>; move the foreign
+      file at index.html or index.json, then publish again
+
+Contract: design/cli.md is the authoritative command contract. This help was
+checked against the pages command contract at merge 2efb44a.
+`
+
 func runPublish(args []string, runtime commandRuntime) int {
 	flags := flag.NewFlagSet("pages publish", flag.ContinueOnError)
-	flags.Usage = subcommandUsage(flags, "Usage: pages publish [flags]")
+	flags.Usage = subcommandUsage(flags, "Usage: pages publish [flags]", publishUsageNotes)
 	filePath := flags.String("file", "", "HTML or zip file to publish (required)")
 	slug := flags.String("slug", "", "page slug (required)")
 	destinationValue := destinationFlags(flags)

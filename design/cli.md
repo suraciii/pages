@@ -1,9 +1,9 @@
 # CLI
 
-pages is one binary with three product actions and one self-description
-command. `serve` runs the publish service, `publish` puts one page live,
-`generate-token` issues an upload Token, and `skill` prints the agent skill
-for this CLI version.
+pages is one binary with three product actions. `serve` runs the publish
+service, `publish` puts one page live, and `generate-token` issues an upload
+Token. `publish --help` also carries the method guidance an agent needs, so
+there is no separate instruction document to fall out of date.
 
 This specification is the source of truth for command grammar, Destination
 syntax, input precedence, defaults, output, and exit codes. User documents
@@ -59,7 +59,6 @@ Rejected alternatives:
 pages serve          [flags]
 pages publish        [flags]
 pages generate-token [flags] [identity]
-pages skill
 pages --version
 ```
 
@@ -328,27 +327,22 @@ Exit codes: 0 on success, 1 for file failures and a refused replacement,
 A newly written Token takes effect on the next tokens reload of `serve`
 (`SIGHUP`).
 
-### pages skill
+### Help as the agent surface
 
-Prints the complete agent skill for the installed CLI version. The output is
-a valid `SKILL.md`, including its YAML frontmatter, and is the source of truth
-for how an agent uses pages.
+`publish --help` is the method surface for an agent. It prints the flag
+definitions and then the guidance a caller cannot derive from the flags:
+which mode to choose, what each mode requires, the recommended command for
+each, how to check the result, and the recovery for a missing Token or
+Identity and for the two failures that happen after the Page is in place.
 
-`skill` accepts no arguments or flags other than `--help` and `-h`. On
-success, it writes only the skill to stdout and exits 0. Help writes only the
-command usage to stdout and exits 0. Any other input writes the error and
-usage to stderr and exits 2.
+The guidance lives in the binary rather than in a separate document, so it
+cannot drift from the command it describes. It states the contract revision
+it was checked against. Help writes to stdout and exits 0; the same text
+accompanies a usage error on stderr.
 
-The command is deterministic. It must not read configuration, inspect the
-file system, access the network, or depend on the current directory. The
-skill is embedded in the binary so its instructions and command grammar have
-the same version.
-
-The separately distributed bootstrap skill is intentionally incomplete. It
-tries `pages skill`. When the CLI is absent or does not support that command,
-it runs `go install github.com/suraciii/pages@latest`, then runs `pages skill`
-and follows that output. It must not manage the user's shell or copy
-operational command syntax that can become stale.
+Help guidance is a summary. It must not restate the whole contract: flag
+precedence, exit codes, and the exact grammar stay in this document, and the
+guidance links here instead of copying them.
 
 ## Examples
 ```text literal
@@ -360,7 +354,7 @@ pages publish --file report.zip --slug report --dest https://pages.example.com -
 
 pages publish --file report.zip --slug report --config <user-config-dir>/.pages/config.json
 
-pages skill
+pages publish --help
 ```
 
 ## Status
