@@ -16,7 +16,7 @@ func runPublish(args []string, runtime commandRuntime) int {
 	filePath := flags.String("file", "", "HTML or zip file to publish (required)")
 	slug := flags.String("slug", "", "page slug (required)")
 	destinationValue := destinationFlags(flags)
-	identity := flags.String("identity", "", "named identity; ignored when PAGES_UPLOAD_TOKEN is set, and rejected when it names a different scope")
+	identity := flags.String("identity", "", "named identity; must match the identity in PAGES_UPLOAD_TOKEN when that is set")
 	timeout := flags.Duration("timeout", 90*time.Second, "upload and verification timeout")
 	configDir := flags.String("config-dir", runtime.environment("PAGES_CONFIG_DIR"), "configuration directory")
 	configFlag := flags.String("config", "", "config file")
