@@ -5,13 +5,12 @@ description: Publish one HTML file or one zip directory Page with the pages CLI,
 
 # pages
 
-Checked against `pages` at `main` commit `2efb44a`, which is v0.0.1 plus
-seven commits. Run `pages --version` to compare. v0.0.1 prints the same
-Token errors, but it does not print the two partial effect errors and it has
-no local Page Index refresh. Links are repository-root relative; from a
-checkout they resolve as written. This document covers the recurring task.
-The authoritative contract is the installed CLI and the documents it links
-to:
+Checked against `pages` at `main` commit `4d9c094`, which is v0.0.1 plus
+eight commits. Run `pages --version` to compare. v0.0.1 has different Token
+error text, no `--identity` conflict check, no partial effect errors, and no
+local Page Index refresh. Links are repository-root relative; from a checkout
+they resolve as written. This document covers the recurring task. The
+authoritative contract is the installed CLI and the documents it links to:
 
 | Question | Where it is answered |
 | --- | --- |
@@ -63,17 +62,20 @@ live, so read Failures before publishing again.
    automatically. Do not also pass `--identity`.
 4. A Token with no dot selects the Default Identity, whose URL path has no
    `@` segment.
-5. When `PAGES_UPLOAD_TOKEN` is set, its scope decides the Identity and
-   `--identity` is ignored. A pure-secret Token plus `--identity bumble`
-   publishes to the Default Identity, not to `@bumble`. Omit `--identity`
-   and let the Token decide.
-6. Each Token error names the missing input, not a recovery. Use this table:
+5. Let the Token decide the scope. When `PAGES_UPLOAD_TOKEN` is set it
+   decides the Identity and `--identity` is not needed. Passing
+   `--identity` with a different scope is a usage error that exits 2 and
+   publishes nothing: a pure-secret Token plus `--identity bumble` does not
+   publish to the Default Identity. Passing `--identity` with the same
+   scope as the Token is accepted.
+6. Every Token error names the recovery. Use this table:
 
-| stderr | Cause | Do this |
+| stderr, after `pages publish: usage: ` | Cause | Do this |
 | --- | --- | --- |
-| `no upload token for default identity` | Remote mode, no `PAGES_UPLOAD_TOKEN`, no config Token | Set the variable, or use a local `--dest` |
-| `token must use secret or identity.secret format` | The Token has a dot, but the identity or the secret is invalid | Paste the full Token exactly as `generate-token` printed it |
-| `no upload token for identity "bumble"` | `--identity bumble`, or `config.identity`, with no secret for it | Set `PAGES_UPLOAD_TOKEN=bumble.<secret>`, or drop `--identity` |
+| `no upload token: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity` | Remote mode, no `PAGES_UPLOAD_TOKEN`, no config Token | Set the variable, or use a local `--dest` |
+| `token must use secret or identity.secret format: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity` | The Token has a dot, but the identity or the secret is invalid | Paste the full Token exactly as `generate-token` printed it |
+| `no upload token for identity "bumble": set PAGES_UPLOAD_TOKEN to bumble.<secret>, or add the identity to the config file passed with --config` | `--identity bumble`, or `config.identity`, with no secret for it | Set `PAGES_UPLOAD_TOKEN=bumble.<secret>`, or drop `--identity` |
+| `--identity "bumble" conflicts with PAGES_UPLOAD_TOKEN, which already selects the Default Identity: drop --identity and let the Token decide the scope` | `--identity` names a scope other than the Token's | Drop `--identity`, or use a Token for the scope you want |
 
 ## Failures
 
