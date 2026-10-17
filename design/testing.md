@@ -76,9 +76,10 @@ start a process, or use an external service.
   user config directory discovery. They cover root command dispatch and the
   minimal local publish command without a Destination. The root version test
   injects a fixed build version and asserts the exact stdout contract.
-- Skill command tests capture stdout and stderr in memory. They prove that the
-  embedded output is a complete skill, help does not print the skill, invalid
-  arguments are usage errors, and no process capability is consulted.
+- Help tests assert that `pages publish --help` prints the mode, Identity, and
+  recovery guidance along with the flags, and that the same guidance reaches
+  stderr with a usage error. The guidance text is a constant, so a test reads
+  it directly rather than duplicating it.
 
 ## Gate
 

@@ -55,24 +55,23 @@ reload of `serve`; no restart is needed.
 
 ## 2. pages serve
 
-The serve flags and their environment fallbacks:
+The serve flags and their environment fallbacks are in the
+[command contract](../design/cli.md#pages-serve). The values the service
+logs at startup, and the ones an operator most often changes:
 
 ```text literal
 pages serve --destination pages-public
 ```
 
-| Flag | Environment | Default | Required |
-| --- | --- | --- | --- |
-| --destination, --dest | PAGES_DESTINATION | current directory | no |
-| --config-dir | PAGES_CONFIG_DIR | user config directory/.pages | no |
-| --tokens-file | PAGES_TOKENS_FILE | user config directory/.pages/tokens.json | no |
-| --listen | PAGES_LISTEN_ADDR | 127.0.0.1:3103 | no |
-| --max-upload-bytes | PAGES_MAX_UPLOAD_BYTES | 10485760 | no |
+- `--destination` must be a local path. Serve rejects a URL, because the
+  write path is loopback only.
+- `--listen` defaults to `127.0.0.1:3103`. The service never listens on a
+  public interface; a static host serves the public reads.
+- `--tokens-file` is reloaded on `SIGHUP`, so a token rotation needs no
+  restart. A failed reload keeps the previous tokens.
 
 At startup the service creates the public root and logs one line with the
-resolved configuration. It answers `GET /healthz` on the listener and
-reloads the tokens file on `SIGHUP`; a failed reload keeps the previous
-tokens. The Destination must be a local path. Serve rejects a URL.
+resolved configuration. It answers `GET /healthz` on the listener.
 
 ## 3. The publish config file
 
@@ -112,7 +111,13 @@ required.
 
 `PAGES_UPLOAD_TOKEN` carries the full Token and always wins in remote mode. A
 pure secret selects the Default Identity. `identity.secret` selects a Named
-Identity. Local mode does not read this environment variable.
+Identity, so no `--identity` flag is needed for that scope. A `--identity`
+value that names a different scope than the Token is a usage error. Local mode
+does not read this environment variable and needs no Token at all.
+
+Remote mode reads `identity` and `identities` from this file only when
+`PAGES_UPLOAD_TOKEN` is unset. Local mode reads `identity` for the output
+directory and never reads a Token.
 
 See the [`pages publish` command contract](../design/cli.md#pages-publish) for
 the exact Destination precedence and alias rules.

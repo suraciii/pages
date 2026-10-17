@@ -72,7 +72,7 @@ func TestResolveRemoteDefaultTokenFromEnvironment(t *testing.T) {
 		"PAGES_DESTINATION":  "https://pages.example.com",
 		"PAGES_UPLOAD_TOKEN": "default-secret",
 	})
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -81,16 +81,65 @@ func TestResolveRemoteDefaultTokenFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestResolveEnvironmentTokenIgnoresInvalidFlagIdentity(t *testing.T) {
+// A pure-secret Token and a Named Identity flag name two different scopes.
+// The Token must not silently win, because the caller would believe it
+// published to the Named Identity while the Page landed in the Default
+// Identity.
+func TestResolveEnvironmentTokenRejectsMismatchedFlagIdentity(t *testing.T) {
 	runtime, _ := testRuntime(map[string]string{
 		"PAGES_DESTINATION":  "https://pages.example.com",
 		"PAGES_UPLOAD_TOKEN": "default-secret",
 	})
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "Bad", Timeout: time.Minute}, runtime)
+	_, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("err = %v, want usage error", err)
+	}
+	want := `--identity "bumble" conflicts with PAGES_UPLOAD_TOKEN, which already selects the Default Identity: drop --identity and let the Token decide the scope`
+	if err.Error() != "usage: "+want {
+		t.Fatalf("err = %q, want %q", err, want)
+	}
+}
+
+// The same rejection covers a Named Identity Token that selects a different
+// Named Identity than the flag, and an invalid flag name. The message names
+// the scope the Token actually selected.
+func TestResolveEnvironmentTokenRejectsConflictingFlagIdentity(t *testing.T) {
+	for name, token := range map[string]string{"other named": "fizz.secret", "invalid name": "bumble.secret"} {
+		t.Run(name, func(t *testing.T) {
+			runtime, _ := testRuntime(map[string]string{
+				"PAGES_DESTINATION":  "https://pages.example.com",
+				"PAGES_UPLOAD_TOKEN": token,
+			})
+			flagIdentity := "bumble"
+			if name == "invalid name" {
+				flagIdentity = "Bad"
+			}
+			_, err := Resolve(Input{File: "page.html", Slug: "report", Identity: flagIdentity, Timeout: time.Minute}, runtime)
+			if !errors.Is(err, ErrUsage) || !strings.Contains(err.Error(), "conflicts with PAGES_UPLOAD_TOKEN") {
+				t.Fatalf("err = %v, want identity conflict usage error", err)
+			}
+			if name == "other named" {
+				want := `--identity "bumble" conflicts with PAGES_UPLOAD_TOKEN, which already selects identity "fizz": drop --identity and let the Token decide the scope`
+				if err.Error() != "usage: "+want {
+					t.Fatalf("err = %q, want %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+// A flag that repeats the scope the Token already selects is consistent, so
+// it is accepted rather than rejected.
+func TestResolveEnvironmentTokenAcceptsMatchingFlagIdentity(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{
+		"PAGES_DESTINATION":  "https://pages.example.com",
+		"PAGES_UPLOAD_TOKEN": "bumble.secret",
+	})
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if resolved.Identity != "" || resolved.Token != "default-secret" {
+	if resolved.Identity != "bumble" || resolved.Token != "bumble.secret" {
 		t.Fatalf("resolved = %+v", resolved)
 	}
 }
@@ -168,6 +217,56 @@ func TestResolveRemoteModeRequiresSelectedToken(t *testing.T) {
 	_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if !errors.Is(err, ErrUsage) {
 		t.Fatalf("err = %v, want usage error", err)
+	}
+	want := "usage: no upload token: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity"
+	if err.Error() != want {
+		t.Fatalf("err = %q, want %q", err, want)
+	}
+}
+
+// The message must name the missing Token, the environment variable to set,
+// and the two accepted Token shapes, so the caller can recover without
+// reading the source.
+func TestResolveRemoteModeMissingTokenMessages(t *testing.T) {
+	t.Run("default identity", func(t *testing.T) {
+		runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com"})
+		_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+		want := "usage: no upload token: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity"
+		if err == nil || err.Error() != want {
+			t.Fatalf("err = %q, want %q", err, want)
+		}
+	})
+	t.Run("named identity", func(t *testing.T) {
+		runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com"})
+		_, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+		want := `usage: no upload token for identity "bumble": set PAGES_UPLOAD_TOKEN to bumble.<secret>, or add the identity to the config file passed with --config`
+		if err == nil || err.Error() != want {
+			t.Fatalf("err = %q, want %q", err, want)
+		}
+	})
+}
+
+// A malformed Token must state the accepted shapes rather than only the
+// rejected syntax.
+func TestResolveRemoteModeRejectsMalformedTokenMessage(t *testing.T) {
+	for _, token := range []string{"secret+one", "Bad.secret", "bumble.secret+one", "bumble."} {
+		t.Run(token, func(t *testing.T) {
+			runtime, _ := testRuntime(map[string]string{
+				"PAGES_DESTINATION":  "https://pages.example.com",
+				"PAGES_UPLOAD_TOKEN": token,
+			})
+			_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+			if !errors.Is(err, ErrUsage) {
+				t.Fatalf("err = %v, want usage error", err)
+			}
+			if strings.Contains(err.Error(), token) {
+				t.Fatalf("err = %q, leaks the Token", err)
+			}
+			want := "token must use secret or identity.secret format: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity"
+			if err.Error() != "usage: "+want {
+				t.Fatalf("err = %q, want %q", err, want)
+			}
+		})
 	}
 }
 

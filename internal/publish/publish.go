@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -130,9 +131,16 @@ func Resolve(input Input, runtime Runtime) (*Resolved, error) {
 		if token != "" {
 			prefix, err := pages.TokenIdentity(token)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrUsage, err)
+				return nil, fmt.Errorf("%w: %v: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity", ErrUsage, err)
 			}
 			identity = prefix
+			if input.Identity != "" && input.Identity != identity {
+				scope := "the Default Identity"
+				if identity != "" {
+					scope = "identity " + strconv.Quote(identity)
+				}
+				return nil, fmt.Errorf("%w: --identity %q conflicts with PAGES_UPLOAD_TOKEN, which already selects %s: drop --identity and let the Token decide the scope", ErrUsage, input.Identity, scope)
+			}
 		} else {
 			identity = firstNonEmpty(input.Identity, config.Identity)
 			if identity != "" && !pages.ValidName(identity) {
@@ -146,9 +154,9 @@ func Resolve(input Input, runtime Runtime) (*Resolved, error) {
 		}
 		if token == "" {
 			if identity == "" {
-				return nil, fmt.Errorf("%w: no upload token for default identity", ErrUsage)
+				return nil, fmt.Errorf("%w: no upload token: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity", ErrUsage)
 			}
-			return nil, fmt.Errorf("%w: no upload token for identity %q", ErrUsage, identity)
+			return nil, fmt.Errorf("%w: no upload token for identity %q: set PAGES_UPLOAD_TOKEN to %s.<secret>, or add the identity to the config file passed with --config", ErrUsage, identity, identity)
 		}
 	} else {
 		identity = firstNonEmpty(input.Identity, config.Identity)
