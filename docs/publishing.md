@@ -100,8 +100,12 @@ in the request path:
 ```text literal
 POST <destination>/<slug>
 Authorization: Bearer <secret> | Bearer <identity>.<secret>
-Content-Type: text/html | application/zip
+Content-Type: text/html; charset=utf-8 | application/zip
 ```
+
+The client sends `text/html; charset=utf-8` for an HTML Page. The server
+accepts `text/html` with no parameter or with exactly `charset=utf-8`, and
+`application/zip` with no parameter. Any other Content-Type is rejected.
 
 The server derives the Default or Named Identity from the verified Token. It
 never takes Identity from the upload path, request body, or a custom header.

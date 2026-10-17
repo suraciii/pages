@@ -134,6 +134,8 @@ Destination syntax, defaults, and input precedence.
 
 ## Documentation
 
+- [Agent documentation catalog](llms.txt): The `llms.txt` map of this
+  repository's documentation for an agent.
 - [Getting Started](docs/getting-started.md) sets up remote Publish from
   install to a live Page.
 - [Publishing](docs/publishing.md) defines the Publish contract and limits.

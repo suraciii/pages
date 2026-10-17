@@ -7,7 +7,9 @@ for this CLI version.
 
 This specification is the source of truth for command grammar, Destination
 syntax, input precedence, defaults, output, and exit codes. User documents
-show runnable examples and link here for the exact contract.
+show runnable examples and link here for the exact contract. It describes the
+`pages` command contract at the merge of `2efb44a`; compare `pages --version`
+before relying on a specific message or flag.
 
 ## Design Drivers
 

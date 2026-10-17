@@ -3,9 +3,15 @@
 > Minimal static Page publishing. One Go command uploads one HTML file or one
 > zip directory Page and returns where it lives. The Public Root also serves a
 > generated Page Index and Page Record for browsing the current Pages.
+>
+> Link set for the pages command contract at the merge of `2efb44a`. Compare
+> `pages --version` before relying on a specific message or flag.
 
 ## Start here
 
+- [Agent Skill](skills/pages/SKILL.md): The stable bootstrap for an agent. It
+  runs `pages skill`, which prints the version-matched instructions for the
+  installed CLI.
 - [Product overview](README.md): The three product actions, what pages keeps,
   and what it does not.
 - [Getting started](docs/getting-started.md): One pass from install to a live
@@ -26,8 +32,9 @@
 
 ## Contracts
 
-- [Command contract](design/cli.md): Command grammar, Destination syntax,
-  input precedence, output, and exit codes.
+- [Command contract](design/cli.md): The single authoritative pages command
+  contract. Command grammar, Destination syntax, input precedence, output,
+  and exit codes. Other documents link here and do not copy its tables.
 - [Architecture](design/architecture.md): The write path, the identity
   boundary, and atomic replacement.
 - [Page Index design](design/catalog.md): Scanning, rendering, Published Time,
@@ -35,6 +42,9 @@
 
 ## Checks and recovery
 
+- [Identity and Tokens](docs/publishing.md#default-and-named-identity): Which
+  mode needs a Token, how a Token selects an Identity, and what each usage
+  error tells you to do next.
 - [Reader guarantees](docs/publishing.md#reader-guarantees): What a reader
   sees during a swap, and what a repeat Publish means.
 - [Partial effects](docs/publishing.md#partial-effects): Failure after the
@@ -46,5 +56,3 @@
 
 - [Limits](docs/publishing.md#limits): No archive, revision, or history; no
   standard input; Page scripts are the host's responsibility.
-- [Not planned](ROADMAP.md): Archives, revisions, histories, rollback,
-  SQLite, and CI are outside the product contract.
