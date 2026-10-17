@@ -112,7 +112,13 @@ required.
 
 `PAGES_UPLOAD_TOKEN` carries the full Token and always wins in remote mode. A
 pure secret selects the Default Identity. `identity.secret` selects a Named
-Identity. Local mode does not read this environment variable.
+Identity, so no `--identity` flag is needed for that scope. A `--identity`
+value that names a different scope than the Token is a usage error. Local mode
+does not read this environment variable and needs no Token at all.
+
+Remote mode reads `identity` and `identities` from this file only when
+`PAGES_UPLOAD_TOKEN` is unset. Local mode reads `identity` for the output
+directory and never reads a Token.
 
 See the [`pages publish` command contract](../design/cli.md#pages-publish) for
 the exact Destination precedence and alias rules.

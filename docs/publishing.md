@@ -68,6 +68,12 @@ pages publish --file report.html --slug report \
 https://pages.example.com/@bumble/report/
 ```
 
+A Token in `identity.secret` form selects its Named Identity on its own. No
+`--identity` flag is needed, and the Token decides the scope in remote mode.
+Passing `--identity` that names a different scope is a usage error: the
+Publisher cannot tell which scope you meant. Omit the flag and let the Token
+select the scope, or set the flag to the same identity the Token names.
+
 Named local example:
 
 ```text literal
@@ -75,6 +81,16 @@ pages publish --file report.html --slug report --identity bumble \
   --dest pages-public
 <current-directory>/pages-public/@bumble/report/
 ```
+
+Local mode needs no Token and no Identity. It ignores `PAGES_UPLOAD_TOKEN`
+completely, because no service verifies anything. `--identity` only chooses
+the output directory there.
+
+Remote mode with no `PAGES_UPLOAD_TOKEN` falls back to the config file:
+`--identity` or `config.identity` selects a Named Identity and
+`config.identities` must hold its secret; without an Identity,
+`config.token` supplies the Default Identity Token. When neither source has a
+Token, the command exits 2 and names the variable to set.
 
 ## Upload Contract
 

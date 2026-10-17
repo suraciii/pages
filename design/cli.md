@@ -128,7 +128,7 @@ precedence defaults.
 | mode | HTTP(S) URL Destination -> remote; local path Destination -> local |
 | slug | `--slug` only; the flag is required |
 | token | `PAGES_UPLOAD_TOKEN`, else the selected Token from the config file |
-| remote identity | env Token scope, else `--identity`, else `config.identity`, else Default Identity |
+| remote identity | env Token scope, which `--identity` must not contradict |
 | local identity | `--identity`, else `config.identity`, else Default Identity |
 
 Destination is the only mode input. Every other value is plain configuration.
@@ -198,10 +198,13 @@ Remote mode (the Destination is an HTTP(S) URL):
 - The Token comes from `PAGES_UPLOAD_TOKEN` or the config file. A pure secret
   selects the Default Identity. `identity.secret` selects a Named Identity.
   A flag for the Token is rejected: secrets must not enter shell history.
-- When `PAGES_UPLOAD_TOKEN` is set, its scope decides the Identity and
-  `--identity` is ignored. Otherwise `--identity` or `config.identity` selects
-  a Named Identity; without one, `config.token` supplies the Default Identity
-  Token.
+- When `PAGES_UPLOAD_TOKEN` is set, its scope decides the Identity. A
+  `--identity` value that names the same scope is accepted; one that names a
+  different scope, or an invalid one, is a usage error, because the command
+  cannot tell which scope the caller meant and the Token is authoritative.
+  Without the environment Token, `--identity` or `config.identity` selects a
+  Named Identity and `config.identities` must hold its secret; without one,
+  `config.token` supplies the Default Identity Token.
 - The public URL is `<destination>/<slug>/` for the Default Identity and
   `<destination>/@<identity>/<slug>/` for a Named Identity.
 - The server enforces the upload byte limit.
