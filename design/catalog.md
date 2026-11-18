@@ -2,8 +2,8 @@
 
 ## Design Drivers
 
-- The public read path stays in the static host. `pages serve` continues to
-  own Uploads and the loopback write path only.
+- The public read path is the Service. `pages serve` serves the generated
+  Index and Record from the Public Root and continues to own Uploads.
 - The design must work without a database or a publication manifest. The
   Public Root is the source of truth for current Pages.
 - Readers must not see a partially written Index. Index replacement must use
@@ -27,7 +27,7 @@
 **Page Record** — a generated static `index.json` that carries the same Page
   entries as the Index in one scope in a structured form. It is a system
   artifact with the same ownership and replacement rules as the Index. It is
-  not an API response: it is a static file the host serves.
+  not an API response: it is a static file that the Service serves.
 
 The root Index is `<public-root>/index.html`. A Named Identity Index is
 `<public-root>/@<identity>/index.html`. A Page remains at
@@ -94,7 +94,7 @@ next refresh; no migration or manifest repairs it.
 
 The time is rendered as a `<time>` element whose `datetime` attribute carries
 the exact value and whose text carries the reader-facing form. The rendered
-text is minute precision and carries no zone suffix: it is the host's
+text is minute precision and carries no zone suffix: it is the server's
 wall-clock time, the same value `ls -l` shows, and a suffix would repeat what
 the times already imply. A reader who needs the exact zone reads the
 `datetime` attribute or the Page Record, both of which carry it.
@@ -121,7 +121,7 @@ cannot disagree about which Pages exist or what order they take.
 ### Refresh
 
 Pages refreshes the Indexes and Page Records after `pages serve` recovers
-staging at startup and after a successful Page swap. Local Publish and server
+staging at startup and after a successful Page swap. Local Publish and Service
 Upload use the same generator. A refresh scans the complete Public Root, so
 the root and all Identity artifacts converge to the same snapshot.
 
@@ -129,16 +129,16 @@ Before replacing any target, refresh checks every existing target. An existing
 `index.html` must contain the Page Index marker and an existing `index.json`
 must begin with the Page Record marker. A Record is matched at the start
 because JSON that embeds the `pages` key inside a nested object is a foreign
-file; an Index is matched anywhere in the document because the host may have
-wrapped the generated HTML. A different file is preserved and refresh fails
-without changing any artifact. The operator must move that file before
+file; an Index is matched anywhere in the document because a deployment may
+have wrapped the generated HTML. A different file is preserved and refresh
+fails without changing any artifact. The operator must move that file before
 enabling Page Index generation.
 
 Refresh uses a temporary file under `.pages/` and an atomic replacement for
 each target. The targets are not one filesystem transaction: if a later
 target fails, earlier targets may already be replaced. A successful Page swap
 is not rolled back because a refresh fails; the failure is reported to the
-caller or service log and the next startup refresh repairs any mixed state.
+caller or Service log and the next startup refresh repairs any mixed state.
 
 The artifacts are refreshed under one Public Root lock so two local Publishers
 cannot interleave Index writes. The lock excludes other processes; refreshes
@@ -157,29 +157,30 @@ after a Page swap writes the new Page set.
 
 A refresh that cannot write its targets leaves the previous artifacts in
 place. Readers then see an Index that does not list the newest Page. The
-failure appears in the service log for `pages serve` and in the Publisher's
+failure appears in the Service log for `pages serve` and in the Publisher's
 error output for local Publish. No signal reaches a reader of the stale
 Index; the operator owns that check.
 
 ### Boundaries
 
-The static host serves the generated files. `pages serve` does not answer
-Index GET requests. `.pages/` remains private and is never an Index entry.
-The Index does not expose Page assets or any token/configuration state. The
-Page Record carries no Page content, so it exposes no more than the Index
-does.
+The Service serves the generated files. A Read of `/` or
+`/@<identity>/` resolves to the Index; a Read of `/index.json` or
+`/@<identity>/index.json` resolves to the Record. `.pages/` remains private
+and is never an Index entry. The Index does not expose Page assets or any
+token/configuration state. The Page Record carries no Page content, so it
+exposes no more than the Index does.
 
 ## Examples
 
 ```text diagram
 <public-root>/
-├── index.html                 <- root Page Index
-├── index.json                 <- root Page Record
-├── report/index.html         <- Default Identity Page
-└── @bumble/
-    ├── index.html             <- @bumble Page Index
-    ├── index.json             <- @bumble Page Record
-    └── overview/index.html    <- Named Identity Page
++-- index.html                 <- root Page Index
++-- index.json                 <- root Page Record
++-- report/index.html          <- Default Identity Page
+`-- @bumble/
+    +-- index.html             <- @bumble Page Index
+    +-- index.json             <- @bumble Page Record
+    `-- overview/index.html    <- Named Identity Page
 ```
 
 The root Index links `report/` to `./report/` and `@bumble/` to `./@bumble/`.
@@ -201,4 +202,5 @@ The matching root Page Record entry:
 ## Status
 
 Implemented. The scanner, renderer, atomic replacement, startup refresh, and
-Publish integration are covered by unit tests.
+Publish integration generate the files; the Service serves the Page Index and
+Page Record through the Read path in [architecture.md](architecture.md).

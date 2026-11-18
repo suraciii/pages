@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -133,7 +132,7 @@ func TestPublisherReportsPageInPlaceWhenVerificationFails(t *testing.T) {
 			}
 			for _, want := range []string{
 				"the page is in place at https://pages.example.com/@bumble/ticket-status/",
-				"check the static host",
+				"check the Service or its proxy",
 			} {
 				if !strings.Contains(err.Error(), want) {
 					t.Fatalf("error = %q, want to contain %q", err, want)
@@ -208,7 +207,7 @@ func TestPublisherPublishesThroughServerAndStaticRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new pages server: %v", err)
 	}
-	client := inProcessPagesClient(t, pageServer, fileSystem, publicRoot)
+	client := inProcessPagesClient(t, pageServer)
 	publisher := Publisher{BaseURL: "https://pages.example.com", Token: "bumble.secret-one", HTTPClient: client, FileSystem: fileSystem}
 
 	publicURL, err := publisher.Publish(context.Background(), "/source/page.html", "overview")
@@ -239,7 +238,7 @@ func TestPublisherPublishesDefaultAndNamedThroughOneOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new pages server: %v", err)
 	}
-	client := inProcessPagesClient(t, pageServer, fileSystem, publicRoot)
+	client := inProcessPagesClient(t, pageServer)
 
 	for token, wantURL := range map[string]string{
 		"default-secret":    "https://pages.example.com/report/",
@@ -285,24 +284,11 @@ func TestPublisherVerifiesDefaultIdentityPage(t *testing.T) {
 	}
 }
 
-func inProcessPagesClient(t *testing.T, server http.Handler, fileSystem filesystem.FS, publicRoot string) *http.Client {
+func inProcessPagesClient(t *testing.T, server http.Handler) *http.Client {
 	t.Helper()
 	return testHTTPClient(func(request *http.Request) *http.Response {
-		if request.Method == http.MethodPost {
-			recorder := httptest.NewRecorder()
-			server.ServeHTTP(recorder, request)
-			return recorder.Result()
-		}
-		path := filepath.Join(publicRoot, filepath.FromSlash(strings.TrimPrefix(request.URL.Path, "/")), "index.html")
-		body, err := fileSystem.ReadFile(path)
-		if err != nil {
-			return response(http.StatusNotFound, "text/plain")
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Status:     "200 OK",
-			Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
-			Body:       io.NopCloser(bytes.NewReader(body)),
-		}
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		return recorder.Result()
 	})
 }

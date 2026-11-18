@@ -56,22 +56,52 @@ reload of `serve`; no restart is needed.
 ## 2. pages serve
 
 The serve flags and their environment fallbacks are in the
-[command contract](../design/cli.md#pages-serve). The values the service
-logs at startup, and the ones an operator most often changes:
+[command contract](../design/cli.md#pages-serve). The inputs an operator most
+often changes:
 
 ```text literal
-pages serve --destination pages-public
+pages serve
 ```
 
-- `--destination` must be a local path. Serve rejects a URL, because the
-  write path is loopback only.
-- `--listen` defaults to `127.0.0.1:3103`. The service never listens on a
-  public interface; a static host serves the public reads.
-- `--tokens-file` is reloaded on `SIGHUP`, so a token rotation needs no
-  restart. A failed reload keeps the previous tokens.
+- `--destination` must be a local path. It is the Public Root that the
+  Service reads and writes. When omitted, it is `pages-public/` under the
+  current directory. Serve rejects a URL.
+- `--listen` defaults to `127.0.0.1:3103`. Set `:443` for a direct public
+  listener, or keep the loopback default behind a TLS proxy. It is one
+  `host:port` address: the port is 1 to 65535, and an IPv6 host uses brackets.
+  An empty host means every interface. A non-loopback listener without TLS
+  logs a warning: plaintext exposes Tokens and Page content.
+- `--tls-cert` and `--tls-key` name an unencrypted PEM certificate chain and
+  private key. Set both or neither. TLS 1.2 is the minimum version.
+- The tokens file, certificate chain, and private key must stay outside the
+  Public Root. The Service resolves symbolic links and refuses to start when
+  one is the Public Root or below it.
+- `--content-security-policy` replaces the reference policy. The value must be
+  one non-empty line. The default blocks scripts. See
+  [deployment.md](deployment.md#headers).
+- `--tokens-file` and the certificate pair are reloaded on `SIGHUP`,
+  independently. A failed reload keeps the previous value. Changing any other
+  input needs a restart.
+- `--max-upload-bytes` must be positive. It applies to Uploads only; it does
+  not limit Reads.
+- A missing or empty tokens file starts the Service read-only: reads and local
+  mode work; remote Uploads return `401`. Create the file and send `SIGHUP` to
+  enable remote Uploads. An unreadable or malformed tokens file exits 1.
 
-At startup the service creates the public root and logs one line with the
-resolved configuration. It answers `GET /healthz` on the listener.
+A malformed flag or environment value exits 2. A malformed or unreadable
+tokens file, a missing certificate pair, a credential path inside the Public
+Root, or a bind failure exits 1. A missing or empty tokens file starts
+read-only.
+
+`serve` writes no product output to stdout. Startup, warning, reload, and
+error logs go to stderr. The startup line carries the listener, Public Root,
+tokens file, upload limit, Token count (`tokens=<n>`), TLS state
+(`tls=on|off`), and CSP state (`csp=default|custom`). It never carries a Token.
+When no Tokens load, a warning says that remote Uploads are disabled.
+
+At startup the Service creates the Public Root and logs the resolved
+configuration. It answers `GET /__pages/healthz` and
+`HEAD /__pages/healthz` on the listener.
 
 ## 3. The publish config file
 
@@ -101,7 +131,7 @@ required.
 
 - `destination` is a local path or an absolute HTTP(S) URL. A path selects
   local mode. A URL selects remote mode. When it is empty, local Publish uses
-  the current working directory.
+  `pages-public/` under the current directory.
 - `token` stores the Default Identity Token. `identities` maps each Named
   Identity to its secret. `identity` selects one Named Identity. Without it,
   Publish uses the Default Identity.

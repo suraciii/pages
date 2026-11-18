@@ -1,17 +1,23 @@
 # pages
 
-Minimal static Page publishing. One Go command has three product actions:
+Minimal Page publishing. One Go binary has three product actions:
 
-- `pages serve` accepts authenticated Uploads on loopback and writes Pages
-  into a Public Root.
+- `pages serve` is the self-hosted Service: it serves published Pages and
+  accepts authenticated Uploads on one listener.
 - `pages publish` publishes one HTML file or zip file and prints its public
   URL or local Page directory.
-- The Public Root includes a generated Page Index so readers can browse the
-  currently published Pages and see when each Page was published.
+- The Service generates a Page Index so readers can browse the currently
+  published Pages and see when each Page was published.
 - `pages generate-token` issues a Token for the Default or one Named Identity.
+
+No static web server is required. A reverse proxy is optional.
 
 `pages publish --help` prints the mode, Identity, and recovery guidance along
 with its flags.
+
+Users and agents use these commands. The Service's HTTP routes are behind
+`pages publish` and serve readers; they are not a separate API for users or
+agents.
 
 pages keeps no publication archive, revision history, rollback state, or
 database.
@@ -49,43 +55,34 @@ printf '<!doctype html><title>Report</title><h1>Ready</h1>\n' > report.html
 ### Local Publish
 
 Local Publish writes directly into a Public Root. It needs no Token or
-service:
+Service, and with no Destination it uses `pages-public/` under the current
+directory:
 
 ```text literal
-pages publish --file report.html --slug report --dest pages-public
+pages publish --file report.html --slug report
 ```
 
 ```text literal
 <current-directory>/pages-public/report/
 ```
 
+A Service with no tokens starts read-only: reads and local mode work; remote
+Uploads return `401`. Generate a Token to enable remote mode.
+
 ### Remote Publish
 
-Remote Publish adds a Token, `pages serve`, and a static host. On the prepared
-service host:
+Remote Publish adds a Token and the Service. No static host is involved. On
+the prepared service host:
 
 ```text literal
-pages generate-token
-pages serve --dest /srv/pages/public
+pages generate-token --tokens-file /etc/pages/tokens.json
+pages serve --dest /srv/pages/public --tokens-file /etc/pages/tokens.json --listen :443 \
+  --tls-cert /etc/pages/tls/fullchain.pem \
+  --tls-key /etc/pages/tls/privkey.pem
 ```
 
-Use this minimal Caddyfile:
-
-```text literal
-pages.example.com {
-    @upload method POST
-    reverse_proxy @upload 127.0.0.1:3103
-
-    @internal path /.pages/*
-    respond @internal 404
-
-    root * /srv/pages/public
-    file_server
-}
-```
-
-Set `PAGES_UPLOAD_TOKEN` to the Token printed by `generate-token`, then
-Publish:
+The Service serves readers and publishers on the same address. Set
+`PAGES_UPLOAD_TOKEN` to the Token printed by `generate-token`, then Publish:
 
 ```text literal
 pages publish --file report.html --slug report \
@@ -96,13 +93,18 @@ pages publish --file report.html --slug report \
 https://pages.example.com/report/
 ```
 
+For a same-host Publish, use local mode (the default `pages-public/`); no
+Token is needed. To exercise the remote path, keep the default listener and
+publish to `http://127.0.0.1:3103` with a Token. Use TLS before a public
+listener.
+
 See [Getting Started](docs/getting-started.md) and
-[Deployment](docs/deployment.md) for host setup, permissions, limits, headers,
-and process management.
+[Deployment](docs/deployment.md) for certificates, permissions, limits,
+headers, and process management.
 
 ## How It Works
 
-A remote Publish sends one Upload:
+In remote mode, `pages publish` sends one Upload to the Service:
 
 ```text literal
 POST <destination>/<slug>
@@ -110,7 +112,7 @@ Authorization: Bearer <secret> | Bearer <identity>.<secret>
 Content-Type: text/html; charset=utf-8 | application/zip
 ```
 
-The service derives the Default or Named Identity from the verified Token. It
+The Service derives the Default or Named Identity from the verified Token. It
 never takes Identity from the upload path, request body, or a custom header.
 The Default Identity stays hidden:
 
@@ -119,16 +121,23 @@ The Default Identity stays hidden:
 <public-root>/@<identity>/<slug>/
 ```
 
-The Publisher verifies and prints the public URL:
+The same Service serves the Page to readers and applies the security headers:
+
+```text literal
+GET <destination>/<slug>/
+200 text/html
+```
+
+`pages publish` verifies that URL and prints it:
 
 ```text literal
 <destination>/<slug>/
 <destination>/@<identity>/<slug>/
 ```
 
-A local Publish writes directly into a Public Root and does not use a service
-or network. `--identity` selects an optional Named Identity. Both modes
-prepare a complete Page before they replace the old Page.
+A local Publish writes directly into a Public Root and does not use the
+Service or the network. `--identity` selects an optional Named Identity. Both
+modes prepare a complete Page before they replace the old Page.
 
 See the [`pages publish` command contract](design/cli.md#pages-publish) for
 Destination syntax, defaults, and input precedence.
@@ -142,10 +151,10 @@ Destination syntax, defaults, and input precedence.
   the Page Record.
 - [Configuration](docs/configuration.md) lists flags, environment variables,
   and config files.
-- [Deployment](docs/deployment.md) covers systemd, Docker, and the reference
-  Caddy configuration.
-- [Architecture](design/architecture.md) explains the write path and Identity
-  boundary.
+- [Deployment](docs/deployment.md) covers systemd, Docker, TLS, headers, and
+  the optional reverse proxy.
+- [Architecture](design/architecture.md) explains the read and write paths,
+  TLS, and the Identity boundary.
 - [Design Index](design/README.md) links every design specification.
 
 ## Agent use

@@ -9,11 +9,16 @@ import (
 	"strings"
 )
 
+// commandContractRevision names the command contract state the help notes
+// were checked against. Bump it when command grammar, defaults, or documented
+// behavior changes.
+const commandContractRevision = "2026-11-18"
+
 func printUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "pages publishes static HTML pages to a public site.")
+	fmt.Fprintln(writer, "pages publishes static HTML pages as a self-hosted service.")
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  pages serve              run the publish service")
+	fmt.Fprintln(writer, "  pages serve              run the self-hosted service")
 	fmt.Fprintln(writer, "  pages publish            publish one page")
 	fmt.Fprintln(writer, "  pages generate-token [identity]")
 	fmt.Fprintln(writer, "                           issue an upload token")

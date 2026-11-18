@@ -118,7 +118,11 @@ func Resolve(input Input, runtime Runtime) (*Resolved, error) {
 		return nil, fmt.Errorf("%w: --file must end in .html or .zip", ErrUsage)
 	}
 
-	resolvedDestination, err := destination.Parse(firstNonEmpty(input.Destination, runtime.Environment("PAGES_DESTINATION"), config.Destination), runtime.CurrentDirectory)
+	destinationInput := firstNonEmpty(input.Destination, runtime.Environment("PAGES_DESTINATION"), config.Destination)
+	if destinationInput == "" {
+		destinationInput = destination.DefaultPublicRoot
+	}
+	resolvedDestination, err := destination.Parse(destinationInput, runtime.CurrentDirectory)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUsage, err)
 	}

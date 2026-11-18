@@ -24,7 +24,11 @@ func TestPublishHelpCarriesAgentGuidance(t *testing.T) {
 		"PAGES_UPLOAD_TOKEN",
 		// The recommended path for each mode.
 		"Recommended path",
-		"pages publish --file report.html --slug report --dest public",
+		"pages publish --file report.html --slug report",
+		"<current-directory>/pages-public/report/",
+		"A loopback HTTP Destination is still remote mode and needs a Token",
+		"check the Service or its proxy",
+		"Run pages serve --help for the Service side",
 		// How to check the result.
 		"Result check",
 		"Exit 0 and exactly one printed line",
@@ -42,8 +46,9 @@ func TestPublishHelpCarriesAgentGuidance(t *testing.T) {
 		"--file",
 		"--slug",
 		"--identity",
-		// A pointer to the authoritative contract.
+		// A pointer to the authoritative contract and the revision it covers.
 		"design/cli.md is the authoritative command contract",
+		"revision 2026-11-18",
 	} {
 		if !strings.Contains(help, want) {
 			t.Errorf("help is missing %q", want)

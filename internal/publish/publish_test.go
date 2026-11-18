@@ -55,15 +55,14 @@ func TestResolveLocalNamedIdentity(t *testing.T) {
 	}
 }
 
-func TestResolveLocalModeDefaultsToCurrentDirectory(t *testing.T) {
+func TestResolveLocalModeDefaultsToPagesPublic(t *testing.T) {
 	runtime, _ := testRuntime(nil)
 	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	workDir, _ := runtime.FileSystem.Abs(".")
-	if resolved.Destination.IsRemote() || resolved.Destination.LocalPath() != workDir {
-		t.Fatalf("resolved = %+v, want %s", resolved, workDir)
+	if resolved.Destination.IsRemote() || resolved.Destination.LocalPath() != destination.DefaultPublicRoot {
+		t.Fatalf("resolved = %+v, want %s", resolved, destination.DefaultPublicRoot)
 	}
 }
 

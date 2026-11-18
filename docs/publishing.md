@@ -2,19 +2,20 @@
 
 A Publisher puts one Page in place and gets back where it lives.
 
-The Public Root also provides a Page Index at its root. Open the Destination
+The Service provides a Page Index at the Public Root. Open the Destination
 root to browse the current Pages and see when each Page was published. A Named
 Identity has a Page Index at its `/@<identity>/` path.
 
 ## Two Ways To Publish
 
 Destination selects the Publish mode. A local path writes into that Public
-Root. An absolute HTTP(S) URL Uploads through the service and verifies the
-public URL. When Destination is not set, the current working directory is the
-Public Root.
+Root. An absolute HTTP(S) URL Uploads through the Service and verifies the
+public URL. When Destination is not set, `pages-public/` under the current
+directory is the Public Root.
 
-Remote mode uses a Token and verifies the public URL. Set
-`PAGES_UPLOAD_TOKEN` in the Publisher's process environment, then run:
+Remote mode uses a Token and verifies the public URL. A public Destination
+must use HTTPS: an Upload carries the Token. Set `PAGES_UPLOAD_TOKEN` in the
+Publisher's process environment, then run:
 
 ```text literal
 pages publish --file report.html --slug report \
@@ -22,19 +23,20 @@ pages publish --file report.html --slug report \
 https://pages.example.com/report/
 ```
 
-Local mode writes directly into a Public Root. It needs no Token or service:
+Local mode writes directly into a Public Root. It needs no Token or Service,
+only write access to that directory. A loopback HTTP(S) Destination is still
+remote mode and needs a Token; the Service never trusts a loopback source
+address as an identity.
 
-```text literal
-pages publish --file report.html --slug report --dest pages-public
-<current-directory>/pages-public/report/
-```
+A Service with no tokens is read-only: remote Uploads get `401`; local mode
+still works.
 
-When no Destination is configured, the Publisher writes to the current
-directory:
+When no Destination is configured, local mode writes to `pages-public/` under
+the current directory. To use another Public Root, pass it as the Destination.
 
 ```text literal
 pages publish --file report.html --slug report
-<current-directory>/report/
+<current-directory>/pages-public/report/
 ```
 
 Local output uses the operating system's path separator. Windows output uses
@@ -77,13 +79,12 @@ select the scope, or set the flag to the same identity the Token names.
 Named local example:
 
 ```text literal
-pages publish --file report.html --slug report --identity bumble \
-  --dest pages-public
+pages publish --file report.html --slug report --identity bumble
 <current-directory>/pages-public/@bumble/report/
 ```
 
 Local mode needs no Token and no Identity. It ignores `PAGES_UPLOAD_TOKEN`
-completely, because no service verifies anything. `--identity` only chooses
+completely, because no Service verifies anything. `--identity` only chooses
 the output directory there.
 
 Remote mode with no `PAGES_UPLOAD_TOKEN` falls back to the config file:
@@ -94,7 +95,10 @@ Token, the command exits 2 and names the variable to set.
 
 ## Upload Contract
 
-The server accepts exactly one Upload shape. Upload does not put an Identity
+The contract below is the wire contract that `pages publish` implements.
+Users and agents run the command; they do not call the route directly.
+
+The Service accepts exactly one Upload shape. Upload does not put an Identity
 in the request path:
 
 ```text literal
@@ -103,19 +107,19 @@ Authorization: Bearer <secret> | Bearer <identity>.<secret>
 Content-Type: text/html; charset=utf-8 | application/zip
 ```
 
-The client sends `text/html; charset=utf-8` for an HTML Page. The server
+The client sends `text/html; charset=utf-8` for an HTML Page. The Service
 accepts `text/html` with no parameter or with exactly `charset=utf-8`, and
 `application/zip` with no parameter. Any other Content-Type is rejected.
 
-The server derives the Default or Named Identity from the verified Token. It
+The Service derives the Default or Named Identity from the verified Token. It
 never takes Identity from the upload path, request body, or a custom header.
 One Upload replaces exactly one Page.
 
-A zip must contain `index.html` at its root. The server rejects archives with
+A zip must contain `index.html` at its root. The Service rejects archives with
 symlinks, path tricks, duplicate names, hidden names, more than 512 entries,
 or an uncompressed size over four times the upload limit.
 
-The server rejects a body that is empty, not UTF-8, not a supported type, or
+The Service rejects a body that is empty, not UTF-8, not a supported type, or
 larger than the upload limit. A rejected Upload must not change the existing
 Page.
 
@@ -143,7 +147,7 @@ second Page or duplicate the effect.
 A Publish can fail after the Page is already in place. The two cases:
 
 - Remote mode: the Upload succeeded but the verification `GET` failed. The
-  Page is live. The static host is the likely cause.
+  Page is live. The Service, its listener, or a proxy is the likely cause.
 - Local mode: the Page swap succeeded but the Page Index refresh failed. The
   Page is live. A foreign file at `<public-root>/index.html`,
   `<public-root>/index.json`, `<public-root>/@<identity>/index.html`, or
@@ -162,6 +166,7 @@ next startup refresh of `pages serve` repairs a mixed Page Index.
 - Publish takes its input from a file. It does not read stdin, because a zip
   Upload needs a reader that supports random access.
 - A Page may contain scripts, stylesheets, images, and data files. pages
-  never executes them. The static host decides which scripts a Page may run,
-  so the host's Content Security Policy is part of the published result.
+  never executes them. The Service sets the Content Security Policy on every
+  response. The default policy blocks scripts. An operator replaces it with
+  `--content-security-policy`; the policy is part of the published result.
 - The Page Index and the Page Record that pages generates contain no scripts.

@@ -101,11 +101,11 @@ func (publisher Publisher) Publish(ctx context.Context, filePath, slug string) (
 	}
 	verification, err := httpClient.Do(verifyRequest)
 	if err != nil {
-		return "", fmt.Errorf("verify page: %w; the page is in place at %s; check the static host", err, publicURL)
+		return "", fmt.Errorf("verify page: %w; the page is in place at %s; check the Service or its proxy", err, publicURL)
 	}
 	defer verification.Body.Close()
 	if verification.StatusCode != http.StatusOK || !isHTML(verification.Header.Get("Content-Type")) {
-		return "", fmt.Errorf("verify page: expected 200 text/html, got %s with %q; the page is in place at %s; check the static host", verification.Status, verification.Header.Get("Content-Type"), publicURL)
+		return "", fmt.Errorf("verify page: expected 200 text/html, got %s with %q; the page is in place at %s; check the Service or its proxy", verification.Status, verification.Header.Get("Content-Type"), publicURL)
 	}
 	return publicURL, nil
 }

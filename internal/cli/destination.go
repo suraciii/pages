@@ -7,9 +7,13 @@ import (
 	"github.com/suraciii/pages/internal/destination"
 )
 
-func destinationFlags(flags *flag.FlagSet) *string {
+func destinationFlags(flags *flag.FlagSet, localOnly bool) *string {
 	value := ""
-	flags.StringVar(&value, "destination", "", "local path or HTTP(S) URL (default current directory)")
+	description := "local path or HTTP(S) URL (default pages-public/)"
+	if localOnly {
+		description = "local Public Root path (default pages-public/)"
+	}
+	flags.StringVar(&value, "destination", "", description)
 	flags.StringVar(&value, "dest", "", "alias for --destination")
 	return &value
 }

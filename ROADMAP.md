@@ -13,25 +13,28 @@ truth for what is done and what is next.
 - `pages publish` local mode: write into a public root directly, with the
   same validation and swap rules.
 - One Destination input for Publish: a local path selects local mode, an
-  HTTP(S) URL selects remote mode, and an omitted value uses the current
-  directory. `--dest` is an alias for `--destination`.
-- The server owns its public root: it creates the directory, stages
-  inside `.pages/`, and recovers crashed swaps at startup.
+  HTTP(S) URL selects remote mode, and an omitted value uses `pages-public/`
+  under the current directory. `--dest` is an alias for `--destination`.
+- The Service owns its Public Root: it creates the directory, stages inside
+  `.pages/`, and recovers crashed swaps at startup.
 - No `fsync`: best-effort durability, documented in
   [docs/publishing.md](docs/publishing.md).
-- Serve operations: `GET /healthz`, tokens reload on `SIGHUP`, one startup
-  log line with the resolved configuration.
+- Self-hosted Service: `pages serve` is the only public listener. It serves
+  Pages, the Page Index, and the Page Record; keeps Uploads authenticated;
+  sends the reference security headers with a Content Security Policy
+  override; supports file-based TLS with independent token and certificate
+  reload on `SIGHUP`; starts read-only when no tokens are present; and answers
+  `GET /__pages/healthz` and `HEAD /__pages/healthz`. The static-host read
+  path is not part of the product.
 - The pages program supports Linux, macOS, and Windows.
 - The Go module is `github.com/suraciii/pages`.
-- The public static-host contract is validated with Caddy: final Page
-  directories are readable by a separate non-root process, `/.pages/*` is
-  blocked, and the reference security headers prevent script execution.
 - Page Index: generated root and Named Identity navigation pages are refreshed
   on startup and after local or remote Publish.
 
 ## Next
 
-No next product milestone is committed.
+No implementation item is open. Run the release gate in
+[design/release.md](design/release.md).
 
 ## Not planned
 

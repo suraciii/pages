@@ -1,134 +1,204 @@
-# Deployment — Hosting the Public Root
+# Deployment - Hosting the Service
 
-`pages serve` accepts Uploads and places static resources into the public
-root. Hosting that public root is a separate choice. Caddy is one option;
-any static file server works. pages does not require any specific host.
+`pages serve` is the public Service. It serves Pages and accepts Uploads on
+one listener. A static host is not part of the deployment. A reverse proxy is
+optional and may add TLS termination, access logging, authentication, or an
+existing network edge.
 
 ## Design Drivers
 
-- The upload server holds tokens and writes files. It must stay on
-  loopback. The static host is the only public listener.
-- pages owns the write path only. TLS, headers, and static serving belong
-  to the host.
-- Publish verification must prove what a reader sees: the `GET` must
-  travel the same public route a reader uses.
-- Published pages come from agents and are untrusted. The host decides which
-  scripts a Page may run. pages never executes Page content and never
-  generates a script, so the host's Content Security Policy is the only
-  control over Page scripts.
+- One Service, one listener, one directory. Deployment must not require a
+  second server configuration that can disagree about the Public Root, the
+  Upload route, or the headers.
+- TLS must be available without an external dependency. The Service accepts a
+  certificate and key file. A trusted proxy may terminate TLS instead. pages
+  does not implement ACME.
+- Public Pages come from agents and are untrusted. The Service sends the
+  reference security headers. The default Content Security Policy blocks
+  scripts. The operator decides whether to relax it.
+- Uploads carry secrets. The default listener is loopback. A public listener
+  should use TLS. Plaintext is allowed only behind a trusted TLS terminator.
+- Deployment owns certificate issuance, process supervision, and backups.
+  The Service owns the Public Root and its staging area.
+- The Service must not cut off a Page with a short fixed write deadline. It
+  bounds header and idle time instead.
 
 ## Model
 
 ```text diagram
-reader ──GET /<slug>/ or /@<identity>/<slug>/──► static host ──► public root
-publisher ──POST /<slug>──► static host ──proxy──► pages serve (loopback)
-                                                             │
-                                                             ▼ swaps in
-                                                        public root
+reader/publisher --GET, HEAD, POST--> pages serve --read/write--> public root
+                                            |
+                                            +--> .pages staging (private)
+                                            +--> tokens file
+                                            +--> certificate and key (optional)
+
+optional:
+reader --HTTPS--> TLS proxy --HTTP loopback--> pages serve
 ```
 
-The deployment chooses the public root once and gives the same path to
-`pages serve --destination` and to the static host's document root.
+One public address carries Reads and Uploads. The HTTP method selects the
+route. The public address is also the remote Destination: a Publisher sends
+`POST <destination>/<slug>` and verifies `GET <destination>/<slug>/` through
+the same Service.
 
-The tokens file must sit outside the public root and outside every host
-document root.
+The Service always serves the Public Root at `/`. If a proxy mounts it under a
+path prefix, the proxy must strip the prefix before it forwards the request.
+The Publisher then uses the prefixed URL as its Destination.
 
-## Host requirements
+## Listener
 
-A host that serves the public root must:
+- `--listen` selects the address. The default is `127.0.0.1:3103`.
+- `--tls-cert` and `--tls-key` name a PEM certificate chain and an unencrypted
+  PEM private key. Both must be set together. TLS 1.2 is the minimum version.
+  HTTP/2 is available on a TLS listener.
+- The tokens file, certificate chain, and private key stay outside the Public
+  Root. The Service refuses to start when one is the Public Root or below it.
+- With TLS, the listener serves HTTPS only. The Service does not listen on
+  port 80 and does not redirect HTTP to HTTPS. A deployment that needs a
+  redirect uses a proxy or a separate front end.
+- Without TLS, a non-loopback listener logs a warning at startup. A
+  non-loopback plaintext listener exposes Tokens and Page content and must sit
+  behind a trusted TLS terminator.
+- `SIGHUP` re-reads the tokens file and the certificate pair independently. A
+  failed reload keeps the previous value for that input and logs the error.
+  Every other input is startup-only and needs a restart.
+- The health path is `GET /__pages/healthz` or `HEAD /__pages/healthz` on the
+  same listener, with the same scheme. It returns `200` after startup recovery
+  and the initial Page Index refresh attempt. A refresh failure is logged and
+  does not stop the listener.
 
-- Serve the public root read-only at the remote address path.
-- Never serve `/.pages/` or other dot-prefixed paths. The staging area is
-  not public.
-- Proxy `POST /<slug>` to the loopback server when `pages publish`
-  must work through the public URL. Without this route, publishing
-  works only against the loopback server directly and the read
-  verification cannot run.
-- Send the reference headers below, or equivalents.
+## Headers
 
-On Unix, pages creates the Public Root, Identity directories, and Page
-directories with mode `0755`. It creates `.pages/` and staging scope
-directories with mode `0700`. The static host can use a separate operating
-system identity without gaining access to staging.
+Every response carries the reference security headers defined in the product
+contract at [../docs/deployment.md](../docs/deployment.md#headers). This
+includes `404`, `405`, redirects, health, and Upload responses.
 
-The remote address is fully custom: any host and any path prefix. A deployment
-that mounts the public root under a prefix, for example `handle_path
-/docs/*`, uses that URL in `pages publish --destination`, and uploads go to
-`POST <destination>/<slug>`.
+The default policy blocks all scripts and every external resource. It allows
+the inline style that the generated Page Index needs, same-origin styles,
+images, and fonts, and data: images and fonts. A Page that uses only
+same-origin styles, images, and fonts, and no script, renders under the
+default policy.
 
-`pages publish` always uploads and verifies through one remote Destination,
-so a full deployment needs a host with both routes.
+`--content-security-policy` or `PAGES_CSP` replaces the whole policy. The value
+must be one non-empty line without carriage return or line feed. The product
+contract shows the reference policy and the same-origin script variant. The
+policy is global to the Service, so an inline-script hash binds the policy to
+one exact script and must be updated when that Page changes. Prefer a
+same-origin script file.
 
-## Caddy reference
+The Service owns the headers. A proxy must pass them through unchanged. A
+proxy that sets its own Content Security Policy takes ownership of script
+execution for every Page.
 
-Caddy is the reference host. The snippet below is one valid
-configuration; other hosts can follow the same rules.
+`Cache-Control: no-store` follows from latest-only semantics: a Slug is
+replaced in place, so a cached copy would go stale after the next Publish.
+
+## Reverse proxy
+
+A proxy is optional. When one is used:
+
+- Bind the Service to loopback and forward to it. The proxy is the only public
+  listener.
+- Forward every method and path. There is no separate static route: the
+  Service serves both reads and Uploads.
+- Strip a path prefix before forwarding. The Service serves `/`.
+- Preserve the `Authorization`, `Content-Type`, and `Content-Length` request
+  headers and the response headers.
+- Allow at least `--max-upload-bytes` in the request body. A lower proxy limit
+  rejects a valid Upload before the Service sees it.
+- Terminate TLS at the proxy if the loopback hop is trusted and private.
+
+A proxy may serve its own ACME HTTP-01 challenge. The Service cannot: it
+blocks `/.well-known/` with every other dot-prefixed path.
+
+## Certificates
+
+The Service reads certificate files; it never requests a certificate.
+
+- Issue the certificate with any ACME client or certificate authority. DNS-01
+  works without a port. HTTP-01 works with a standalone challenge on port 80
+  or through a proxy that serves the challenge.
+- Give the Service account read access to the certificate chain and the
+  private key. Keep both outside the Public Root; the Service refuses to start
+  otherwise.
+- The private key should be readable only by the Service account or its group,
+  and it must be an unencrypted PEM private key.
+- Renew, then reload: `systemctl reload pages` or `kill -HUP <pid>`. A failed
+  reload keeps the old certificate.
+- A certificate for a proxy is outside the Service. Renew it with the proxy.
+
+## systemd
+
+The unit runs the Service directly with TLS on port 443. The non-root account
+needs `CAP_NET_BIND_SERVICE` for a port below 1024.
 
 ```text literal
-@pages_upload {
-    method POST
-}
+[Unit]
+Description=pages publishing service
+After=network-online.target
+Wants=network-online.target
 
-handle @pages_upload {
-    request_body {
-        max_size 10485760
-    }
-    reverse_proxy 127.0.0.1:3103
-}
+[Service]
+User=pages
+Group=pages
+ExecStart=/usr/local/bin/pages serve --destination /srv/pages/public --tokens-file /etc/pages/tokens.json --listen :443 --tls-cert /etc/pages/tls/fullchain.pem --tls-key /etc/pages/tls/privkey.pem
+ExecReload=/bin/kill -HUP $MAINPID
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+Restart=on-failure
 
-@pages_internal {
-    path /.pages/*
-}
-
-respond @pages_internal 404
-
-header {
-    Content-Security-Policy "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-    X-Content-Type-Options nosniff
-    Referrer-Policy no-referrer
-    X-Frame-Options DENY
-    Cache-Control "no-store"
-}
-
-root * /srv/pages/public
-file_server
+[Install]
+WantedBy=multi-user.target
 ```
 
-A deployment that publishes interactive Pages replaces
-`default-src 'none'` with `default-src 'none'; script-src 'self'`, or adds a
-per-Page `sha256-` value. The rest of the policy is unchanged.
+```text literal
+systemctl daemon-reload
+systemctl enable --now pages
+systemctl status pages
+journalctl -u pages -f
+```
 
-## Semantics
+A deployment that terminates TLS at a proxy removes the TLS flags, sets
+`--listen 127.0.0.1:3103`, and removes the capability line.
 
-- Only `POST` reaches the server. Every other method goes to the
-  static handler. `/.pages/*` never serves: the staging area is not
-  public. The server also rejects non-POST methods: host routing is the
-  primary boundary and the server check is defense in depth.
-- The host body limit and `pages serve --max-upload-bytes` must be the
-  same value. The host enforces the limit for the public; the server
-  enforces it for the loopback hop. Operators change both together.
-- The static host root and `pages serve --destination` must name the same
-  Public Root.
-- The CSP header is the only control over Page scripts. A Page may contain
-  same-origin scripts, and pages never executes them and never generates
-  one. The reference policy uses `default-src 'none'`, which blocks all
-  scripts. An operator who publishes interactive Pages relaxes it: add
-  `script-src 'self'` for same-origin script files, or a `sha256-` value per
-  Page for one inline script. The Page Index and Page Record carry no script
-  and need no exception. `style-src 'self' 'unsafe-inline'` allows
-  stylesheets from a zip page and keeps inline styles working in
-  single-file pages; `img-src 'self' data:` allows bundled images.
-- `Cache-Control: no-store` follows from latest-only semantics: the same
-  slug is replaced in place, so a cached copy would go stale after the
-  next publish.
-- The verification `GET` in `pages publish` passes through the same static
-  route as a reader. A `200` with an HTML content type proves both the
-  write and the read path.
+Operate the Service:
+
+- Add or rotate a Token: edit the tokens file, then `systemctl reload pages`.
+  The Service keeps the previous tokens when the file fails to load.
+- Start without tokens: a missing or empty tokens file starts the Service
+  read-only. Reads and local mode work; remote Uploads return `401`. Create
+  the file and reload to enable remote Uploads.
+- Renew a certificate: replace the files, then `systemctl reload pages`.
+- Stop: `systemctl stop pages`. The Service shuts down gracefully and exits 0.
+- Health: `GET /__pages/healthz` over the configured scheme.
 
 ## Docker
 
-The image runs `pages serve`. Deployment mounts the public root and keeps
-the write port on the host loopback:
+The project does not publish an official container image. Build it from the
+release tag. The image runs `pages serve` as an unprivileged user and listens
+on `0.0.0.0:3103` inside the container.
+
+```text literal
+git checkout v0.0.1
+docker build -t pages:0.0.1 .
+```
+
+Direct TLS, with the Public Root, Token file, and certificate mounted:
+
+```text literal
+docker run \
+  -v /srv/pages:/srv/pages \
+  -v /etc/pages/tokens.json:/run/secrets/pages_tokens:ro \
+  -v /etc/pages/tls:/run/secrets/pages_tls:ro \
+  -e PAGES_TLS_CERT=/run/secrets/pages_tls/fullchain.pem \
+  -e PAGES_TLS_KEY=/run/secrets/pages_tls/privkey.pem \
+  -p 443:3103 \
+  --user "$(id -u pages):$(id -g pages)" \
+  pages:0.0.1
+```
+
+Behind a TLS proxy, omit the certificate mount and TLS variables, and publish
+the port on the host loopback only:
 
 ```text literal
 docker run \
@@ -136,31 +206,40 @@ docker run \
   -v /etc/pages/tokens.json:/run/secrets/pages_tokens:ro \
   -p 127.0.0.1:3103:3103 \
   --user "$(id -u pages):$(id -g pages)" \
-  pages:local
+  pages:0.0.1
 ```
 
-- `-p 127.0.0.1:3103:3103` publishes the write port on the host loopback
-  only. Publishing it on `0.0.0.0` puts the upload endpoint on the public
-  network and must not happen.
-- The health probe is `GET /healthz` on the container port.
+- `-p 443:3103` publishes the TLS listener. Publishing the plaintext port on
+  the host's `0.0.0.0` exposes Tokens and must not happen.
+- In the proxy case the container still listens on `0.0.0.0:3103`, so the
+  Service logs its plaintext warning. The host publishes that port on loopback
+  only, and that mapping is the exposure boundary.
 - `/srv/pages` is the host volume for the Public Root.
-- `/etc/pages/tokens.json` is a Linux host file mounted read-only at
-  `/run/secrets/pages_tokens`. The tokens file stays outside the Public Root.
+- `/etc/pages/tokens.json` is mounted read-only. It stays outside the Public
+  Root. A local-only container can omit the token mount: the Service starts
+  read-only and local mode still works.
 - The container runs with the host `pages` account's numeric UID and GID so it
-  can read the mounted Token and write the Public Root.
+  can read the mounted files and write the Public Root.
+- The health probe uses the same scheme as the listener:
+  `GET /__pages/healthz`.
 
-## systemd
+## Operational limits
 
-`pages serve` is one HTTP service. systemd and Docker are two equivalent
-ways to run it; see [docs/deployment.md](../docs/deployment.md)
-for complete units.
+The Service is intentionally small. A deployment that needs these features
+places a proxy in front of it:
 
-- Start: `systemctl start pages`.
-- Add an Identity without downtime: edit the tokens file, then
-  `systemctl reload pages` (SIGHUP).
-- Stop: `systemctl stop pages` (SIGTERM, graceful shutdown).
+- No read authentication. Every published Page is public.
+- No virtual hosts. One Service serves one Public Root.
+- No access log. The Service logs startup, reload results, and errors only.
+- No compression.
+- No range requests or conditional responses.
+- No rate limit on Uploads. A Token and the upload byte limit are the
+  controls.
+- No ACME client and no HTTP-to-HTTPS redirect.
+- No HSTS header.
 
 ## Status
 
-The Caddy snippet above is the reference configuration. Deployment files
-stay outside the repository by design; this document is their reference.
+Implemented. The Service is the only public listener, supports direct
+file-based TLS with reload, sends the reference security headers, and starts
+read-only when the tokens file is missing or empty.

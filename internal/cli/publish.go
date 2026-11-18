@@ -17,18 +17,21 @@ import (
 // contract revision it was checked against.
 const publishUsageNotes = `
 Mode
-  A local --dest path writes into a public root you own. No Token, no
+  A local --dest path writes into a Public Root you own. No Token, no
   Identity, no service, no network. An absolute HTTP(S) --dest URL
-  uploads through a service and verifies the public URL.
+  uploads through the Service and verifies the public URL.
 
 Recommended path
-  Local:
-    pages publish --file report.html --slug report --dest public
-    public/report/
-  Remote, a Token in the process environment, never on the command line:
+  Local, with the default pages-public/ Public Root:
+    pages publish --file report.html --slug report
+    <current-directory>/pages-public/report/
+  Remote over HTTPS, with a Token in the process environment, never on the
+  command line:
     PAGES_UPLOAD_TOKEN=bumble.sek pages publish --file report.html --slug report \
       --dest https://pages.example.com
     https://pages.example.com/@bumble/report/
+  A loopback HTTP Destination is still remote mode and needs a Token. Use
+  HTTPS for a non-loopback Destination.
 
 Identity
   Local mode needs no Token and no Identity. It never reads
@@ -49,12 +52,14 @@ Recovery
   the same Slug again replaces the Page, so a repeat after a timeout is safe.
   Two failures happen after the Page is already in place, and the Page stays
   live in both:
-    verify page: ... the page is in place at <url>; check the static host
+    verify page: ... the page is in place at <url>; check the Service or its proxy
     refresh page index: ... the page is in place at <dir>; move the foreign
       file at index.html or index.json, then publish again
 
-Contract: design/cli.md is the authoritative command contract. This help was
-checked against the pages command contract at merge 2efb44a.
+  Run pages serve --help for the Service side: listener, TLS, and tokens.
+
+Contract: design/cli.md is the authoritative command contract, revision ` + commandContractRevision + `.
+This help was checked against it.
 `
 
 func runPublish(args []string, runtime commandRuntime) int {
@@ -62,7 +67,7 @@ func runPublish(args []string, runtime commandRuntime) int {
 	flags.Usage = subcommandUsage(flags, "Usage: pages publish [flags]", publishUsageNotes)
 	filePath := flags.String("file", "", "HTML or zip file to publish (required)")
 	slug := flags.String("slug", "", "page slug (required)")
-	destinationValue := destinationFlags(flags)
+	destinationValue := destinationFlags(flags, false)
 	identity := flags.String("identity", "", "named identity; must match the identity in PAGES_UPLOAD_TOKEN when that is set")
 	timeout := flags.Duration("timeout", 90*time.Second, "upload and verification timeout")
 	configDir := flags.String("config-dir", runtime.environment("PAGES_CONFIG_DIR"), "configuration directory")
