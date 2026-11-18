@@ -55,15 +55,14 @@ func TestResolveLocalNamedIdentity(t *testing.T) {
 	}
 }
 
-func TestResolveLocalModeDefaultsToCurrentDirectory(t *testing.T) {
+func TestResolveLocalModeDefaultsToPagesPublic(t *testing.T) {
 	runtime, _ := testRuntime(nil)
 	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	workDir, _ := runtime.FileSystem.Abs(".")
-	if resolved.Destination.IsRemote() || resolved.Destination.LocalPath() != workDir {
-		t.Fatalf("resolved = %+v, want %s", resolved, workDir)
+	if resolved.Destination.IsRemote() || resolved.Destination.LocalPath() != destination.DefaultPublicRoot {
+		t.Fatalf("resolved = %+v, want %s", resolved, destination.DefaultPublicRoot)
 	}
 }
 
@@ -72,7 +71,7 @@ func TestResolveRemoteDefaultTokenFromEnvironment(t *testing.T) {
 		"PAGES_DESTINATION":  "https://pages.example.com",
 		"PAGES_UPLOAD_TOKEN": "default-secret",
 	})
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -81,16 +80,65 @@ func TestResolveRemoteDefaultTokenFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestResolveEnvironmentTokenIgnoresInvalidFlagIdentity(t *testing.T) {
+// A pure-secret Token and a Named Identity flag name two different scopes.
+// The Token must not silently win, because the caller would believe it
+// published to the Named Identity while the Page landed in the Default
+// Identity.
+func TestResolveEnvironmentTokenRejectsMismatchedFlagIdentity(t *testing.T) {
 	runtime, _ := testRuntime(map[string]string{
 		"PAGES_DESTINATION":  "https://pages.example.com",
 		"PAGES_UPLOAD_TOKEN": "default-secret",
 	})
-	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "Bad", Timeout: time.Minute}, runtime)
+	_, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("err = %v, want usage error", err)
+	}
+	want := `--identity "bumble" conflicts with PAGES_UPLOAD_TOKEN, which already selects the Default Identity: drop --identity and let the Token decide the scope`
+	if err.Error() != "usage: "+want {
+		t.Fatalf("err = %q, want %q", err, want)
+	}
+}
+
+// The same rejection covers a Named Identity Token that selects a different
+// Named Identity than the flag, and an invalid flag name. The message names
+// the scope the Token actually selected.
+func TestResolveEnvironmentTokenRejectsConflictingFlagIdentity(t *testing.T) {
+	for name, token := range map[string]string{"other named": "fizz.secret", "invalid name": "bumble.secret"} {
+		t.Run(name, func(t *testing.T) {
+			runtime, _ := testRuntime(map[string]string{
+				"PAGES_DESTINATION":  "https://pages.example.com",
+				"PAGES_UPLOAD_TOKEN": token,
+			})
+			flagIdentity := "bumble"
+			if name == "invalid name" {
+				flagIdentity = "Bad"
+			}
+			_, err := Resolve(Input{File: "page.html", Slug: "report", Identity: flagIdentity, Timeout: time.Minute}, runtime)
+			if !errors.Is(err, ErrUsage) || !strings.Contains(err.Error(), "conflicts with PAGES_UPLOAD_TOKEN") {
+				t.Fatalf("err = %v, want identity conflict usage error", err)
+			}
+			if name == "other named" {
+				want := `--identity "bumble" conflicts with PAGES_UPLOAD_TOKEN, which already selects identity "fizz": drop --identity and let the Token decide the scope`
+				if err.Error() != "usage: "+want {
+					t.Fatalf("err = %q, want %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+// A flag that repeats the scope the Token already selects is consistent, so
+// it is accepted rather than rejected.
+func TestResolveEnvironmentTokenAcceptsMatchingFlagIdentity(t *testing.T) {
+	runtime, _ := testRuntime(map[string]string{
+		"PAGES_DESTINATION":  "https://pages.example.com",
+		"PAGES_UPLOAD_TOKEN": "bumble.secret",
+	})
+	resolved, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if resolved.Identity != "" || resolved.Token != "default-secret" {
+	if resolved.Identity != "bumble" || resolved.Token != "bumble.secret" {
 		t.Fatalf("resolved = %+v", resolved)
 	}
 }
@@ -169,6 +217,56 @@ func TestResolveRemoteModeRequiresSelectedToken(t *testing.T) {
 	if !errors.Is(err, ErrUsage) {
 		t.Fatalf("err = %v, want usage error", err)
 	}
+	want := "usage: no upload token: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity"
+	if err.Error() != want {
+		t.Fatalf("err = %q, want %q", err, want)
+	}
+}
+
+// The message must name the missing Token, the environment variable to set,
+// and the two accepted Token shapes, so the caller can recover without
+// reading the source.
+func TestResolveRemoteModeMissingTokenMessages(t *testing.T) {
+	t.Run("default identity", func(t *testing.T) {
+		runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com"})
+		_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+		want := "usage: no upload token: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity"
+		if err == nil || err.Error() != want {
+			t.Fatalf("err = %q, want %q", err, want)
+		}
+	})
+	t.Run("named identity", func(t *testing.T) {
+		runtime, _ := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com"})
+		_, err := Resolve(Input{File: "page.html", Slug: "report", Identity: "bumble", Timeout: time.Minute}, runtime)
+		want := `usage: no upload token for identity "bumble": set PAGES_UPLOAD_TOKEN to bumble.<secret>, or add the identity to the config file passed with --config`
+		if err == nil || err.Error() != want {
+			t.Fatalf("err = %q, want %q", err, want)
+		}
+	})
+}
+
+// A malformed Token must state the accepted shapes rather than only the
+// rejected syntax.
+func TestResolveRemoteModeRejectsMalformedTokenMessage(t *testing.T) {
+	for _, token := range []string{"secret+one", "Bad.secret", "bumble.secret+one", "bumble."} {
+		t.Run(token, func(t *testing.T) {
+			runtime, _ := testRuntime(map[string]string{
+				"PAGES_DESTINATION":  "https://pages.example.com",
+				"PAGES_UPLOAD_TOKEN": token,
+			})
+			_, err := Resolve(Input{File: "page.html", Slug: "report", Timeout: time.Minute}, runtime)
+			if !errors.Is(err, ErrUsage) {
+				t.Fatalf("err = %v, want usage error", err)
+			}
+			if strings.Contains(err.Error(), token) {
+				t.Fatalf("err = %q, leaks the Token", err)
+			}
+			want := "token must use secret or identity.secret format: set PAGES_UPLOAD_TOKEN to a secret, or identity.secret for a Named Identity"
+			if err.Error() != "usage: "+want {
+				t.Fatalf("err = %q, want %q", err, want)
+			}
+		})
+	}
 }
 
 func TestResolveNamedConfigMustExist(t *testing.T) {
@@ -185,6 +283,25 @@ func TestLoadConfigRejectsUnknownField(t *testing.T) {
 	mustWriteFile(t, fileSystem, configPath, `{"extra":"value"}`)
 	if _, err := loadConfig(runtime.FileSystem, configPath); err == nil {
 		t.Fatal("load succeeded, want unknown field error")
+	}
+}
+
+func TestResolveRejectsDirectoryFile(t *testing.T) {
+	for _, name := range []string{"/source/report", "/source/report.html"} {
+		t.Run(name, func(t *testing.T) {
+			runtime, fileSystem := testRuntime(nil)
+			if err := fileSystem.MkdirAll(name, 0o755); err != nil {
+				t.Fatalf("create directory: %v", err)
+			}
+			_, err := Resolve(Input{File: name, Slug: "report", Timeout: time.Minute}, runtime)
+			if !errors.Is(err, ErrUsage) {
+				t.Fatalf("err = %v, want usage error", err)
+			}
+			want := "--file must not be a directory; package it as a zip"
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("err = %v, want %q", err, want)
+			}
+		})
 	}
 }
 
@@ -301,6 +418,116 @@ func TestRunLocalRejectsBadZipAndLeavesNoTrace(t *testing.T) {
 	}
 	if _, err := fileSystem.Stat("/public/report"); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("page exists after rejected publish: %v", err)
+	}
+}
+
+func TestRunLocalRejectsEmptyAndInvalidUTF8HTML(t *testing.T) {
+	for name, content := range map[string]string{
+		"empty":        "",
+		"invalid-utf8": "\xff\xfe<h1>bad</h1>",
+	} {
+		t.Run(name, func(t *testing.T) {
+			runtime, fileSystem := testRuntime(nil)
+			if err := publishExistingPage(t, fileSystem); err != nil {
+				t.Fatalf("publish existing page: %v", err)
+			}
+			pageFile := "/source/page.html"
+			if err := fileSystem.MkdirAll("/source", 0o755); err != nil {
+				t.Fatalf("create source: %v", err)
+			}
+			if err := fileSystem.WriteFile(pageFile, []byte(content), 0o644); err != nil {
+				t.Fatalf("write page file: %v", err)
+			}
+
+			_, err := Run(&Resolved{File: pageFile, Slug: "report", Destination: localDestination(t, "/public")}, runtime)
+			if !errors.Is(err, ErrUsage) {
+				t.Fatalf("err = %v, want usage error", err)
+			}
+			assertPageUnchanged(t, fileSystem)
+			// Nothing is staged: the check runs before StageDir.
+			staging := "/public/.pages/staging/default"
+			entries, readErr := fileSystem.ReadDir(staging)
+			if readErr == nil && len(entries) > 0 {
+				t.Fatalf("staged %d entries after a rejected publish", len(entries))
+			} else if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+				t.Fatalf("read staging: %v", readErr)
+			}
+		})
+	}
+}
+
+// The body rules are usage errors in both modes. Remote mode catches an
+// empty file before the Upload, so it must also report a usage error rather
+// than a step failure.
+func TestRunRemoteRejectsEmptyFileAsUsageError(t *testing.T) {
+	runtime, fileSystem := testRuntime(map[string]string{"PAGES_DESTINATION": "https://pages.example.com", "PAGES_UPLOAD_TOKEN": "secret"})
+	resolved, err := Resolve(Input{File: "/source/page.html", Slug: "report", Timeout: time.Minute}, runtime)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := fileSystem.MkdirAll("/source", 0o755); err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	if err := fileSystem.WriteFile("/source/page.html", nil, 0o644); err != nil {
+		t.Fatalf("write empty page file: %v", err)
+	}
+
+	_, err = Run(resolved, runtime)
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("err = %v, want usage error", err)
+	}
+	if want := "page file is empty"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
+func TestRunLocalRefreshFailureReportsPageInPlace(t *testing.T) {
+	runtime, fileSystem := testRuntime(nil)
+	if err := publishExistingPage(t, fileSystem); err != nil {
+		t.Fatalf("publish existing page: %v", err)
+	}
+	// A non-Index file at the root index.html blocks the refresh.
+	mustWriteFile(t, fileSystem, "/public/index.html", "<h1>not a page index</h1>")
+	mustWriteFile(t, fileSystem, "/source/page.html", "<h1>replacement</h1>")
+
+	_, runErr := Run(&Resolved{File: "/source/page.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime)
+	if runErr == nil {
+		t.Fatal("run succeeded, want refresh failure")
+	}
+	if errors.Is(runErr, ErrUsage) {
+		t.Fatalf("err = %v, want operational failure", runErr)
+	}
+	absolutePublicRoot, absErr := fileSystem.Abs("/public")
+	if absErr != nil {
+		t.Fatalf("resolve public root: %v", absErr)
+	}
+	pageDir := filepath.Join(absolutePublicRoot, "report")
+	for _, want := range []string{"refresh page index", "refusing to replace existing catalog", pageDir} {
+		if !strings.Contains(runErr.Error(), want) {
+			t.Fatalf("err = %v, want %q", runErr, want)
+		}
+	}
+	page, readErr := fileSystem.ReadFile(filepath.Join(pageDir, "index.html"))
+	if readErr != nil || string(page) != "<h1>replacement</h1>" {
+		t.Fatalf("page = %q, %v", page, readErr)
+	}
+}
+
+// publishExistingPage puts one Page at /public/report so a later assertion
+// can prove the rejected publish left it unchanged.
+func publishExistingPage(t *testing.T, fileSystem filesystem.FS) error {
+	t.Helper()
+	mustWriteFile(t, fileSystem, "/source/first.html", "<h1>first</h1>")
+	runtime := Runtime{FileSystem: fileSystem}
+	_, err := Run(&Resolved{File: "/source/first.html", Slug: "report", Destination: localDestination(t, "/public")}, runtime)
+	return err
+}
+
+func assertPageUnchanged(t *testing.T, fileSystem filesystem.FS) {
+	t.Helper()
+	page, err := fileSystem.ReadFile("/public/report/index.html")
+	if err != nil || string(page) != "<h1>first</h1>" {
+		t.Fatalf("page = %q, %v, want the existing page", page, err)
 	}
 }
 

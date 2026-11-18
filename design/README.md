@@ -15,14 +15,14 @@ diverges significantly from the code, it lists a `Gap` section.
 
 - [AGENTS.md](AGENTS.md) — design-document writing rules for agents. Read it
   before writing a spec in `design/`.
-- [architecture.md](architecture.md) — write path, read path, the identity
-  boundary, and atomic replacement.
-- [catalog.md](catalog.md) — Page Index scanning, rendering, refresh, and
-  replacement.
-- [cli.md](cli.md) — the `pages` command: `serve`, `publish`,
-  `generate-token`, and `skill` subcommands, flags, output, and exit codes.
-- [deployment.md](deployment.md) — hosting the public root: host
-  requirements, the Caddy reference, and the verification path.
+- [architecture.md](architecture.md) — read and write paths, the identity
+  boundary, atomic replacement, and TLS.
+- [catalog.md](catalog.md) — Page Index and Page Record scanning, rendering,
+  refresh, and replacement.
+- [cli.md](cli.md) — the `pages` command: `serve`, `publish`, and
+  `generate-token` subcommands, flags, output, and exit codes.
+- [deployment.md](deployment.md) — hosting the Service: listener, TLS,
+  headers, systemd, Docker, and the verification path.
 - [release.md](release.md) — source distribution, release gates, and the
   immutable tag sequence.
 - [testing.md](testing.md) — unit test strategy and the verification gate.

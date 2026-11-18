@@ -2,6 +2,7 @@ package cli
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"runtime/debug"
@@ -18,6 +19,7 @@ type commandRuntime struct {
 	httpClient       interface {
 		Do(*http.Request) (*http.Response, error)
 	}
+	listen  func(string, string) (net.Listener, error)
 	stdout  io.Writer
 	stderr  io.Writer
 	version string
@@ -29,6 +31,7 @@ func productionCommandRuntime() commandRuntime {
 		environment:      os.Getenv,
 		userConfigDir:    os.UserConfigDir,
 		currentDirectory: os.Getwd,
+		listen:           net.Listen,
 		stdout:           os.Stdout,
 		stderr:           os.Stderr,
 		version:          buildVersion(),

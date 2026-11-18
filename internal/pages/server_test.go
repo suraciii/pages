@@ -127,7 +127,7 @@ func TestServerRejectsIdentityClaimInUploadPath(t *testing.T) {
 func TestServerHealthzNeedsNoAuthentication(t *testing.T) {
 	server, _ := newTestServer(t, namedTestTokens("bumble", "secret-one"), 1024)
 
-	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	request := httptest.NewRequest(http.MethodGet, "/__pages/healthz", nil)
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {

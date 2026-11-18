@@ -20,12 +20,12 @@ section. The body is the spec; the Gap is the footnote.
 - [writing-style.md](writing-style.md) — language, structure, and markup
   rules for every document in the repository.
 - [getting-started.md](getting-started.md) — one pass from zero to a live
-  page: install, token, service, host, publish.
+  page: install, token, Service, publish, TLS.
 - [publishing.md](publishing.md) — the publish contract: Upload shape, public
   address, rejection rules, and limits.
-- [catalog.md](catalog.md) — the Page Index shown at the Public Root and in
-  Named Identity scopes.
+- [catalog.md](catalog.md) — the Page Index and Page Record shown at the
+  Public Root and in Named Identity scopes.
 - [configuration.md](configuration.md) — every configuration input: tokens
   file, serve flags, publish config file, and environment variables.
-- [deployment.md](deployment.md) — running the service: systemd, Docker,
-  and the Caddy reference.
+- [deployment.md](deployment.md) — running the Service on Linux: systemd,
+  Docker, TLS, headers, and the optional reverse proxy.

@@ -38,6 +38,7 @@ func (osFS) Rename(oldPath, newPath string) error       { return os.Rename(oldPa
 func (osFS) Remove(path string) error                   { return os.Remove(path) }
 func (osFS) RemoveAll(path string) error                { return os.RemoveAll(path) }
 func (osFS) Abs(path string) (string, error)            { return filepath.Abs(path) }
+func (osFS) EvalSymlinks(path string) (string, error)   { return filepath.EvalSymlinks(path) }
 
 func (osFS) Lock(path string) (func(), error) {
 	return lockOSFile(path)

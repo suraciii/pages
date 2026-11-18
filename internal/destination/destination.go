@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// DefaultPublicRoot is the Public Root name used when no Destination is set.
+const DefaultPublicRoot = "pages-public"
+
 // Value is either a local path or an absolute HTTP(S) URL.
 type Value struct {
 	localPath string

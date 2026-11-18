@@ -9,7 +9,9 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/suraciii/pages/internal/filesystem"
@@ -19,6 +21,15 @@ const (
 	catalogStagingName = "catalog-staging"
 	catalogLockName    = "catalog.lock"
 	catalogMarker      = "<!-- pages:page-index -->"
+	catalogRecordName  = "index.json"
+	// catalogRecordMark is the serialized prefix of every Page Record: the
+	// opening brace followed by the pages key. A foreign `index.json` that
+	// does not start this way is preserved instead of being replaced.
+	catalogRecordMark = "{\n  \"pages\": ["
+	// publishedTimeLayout is the reader-facing Published Time form. It has
+	// minute precision and no zone: a reader sees the same wall-clock time
+	// that `ls -l` shows on the server, and a local Index never mixes zones.
+	publishedTimeLayout = "2006-01-02 15:04"
 )
 
 type catalogScope struct {
@@ -34,8 +45,20 @@ type catalogPage struct {
 type catalogTarget struct {
 	key     string
 	path    string
+	marker  string
 	content []byte
 }
+
+// catalogRefreshMu serializes refreshes inside one process. The file lock
+// excludes other processes only: POSIX record locks are owned by the
+// process, so a second goroutine in this process would take the same lock
+// without blocking and two refreshes could interleave their writes.
+//
+// The gap is not covered by a test: the in-memory file system implements
+// Lock as a per-path mutex, so an in-memory test cannot observe two
+// refreshes inside one process overlapping, and design/testing.md forbids
+// a test that touches a physical file system.
+var catalogRefreshMu sync.Mutex
 
 // RefreshIndexes rebuilds the root and Named Identity Page Indexes from the
 // current Public Root. The Index files are system artifacts, not Pages.
@@ -46,6 +69,8 @@ func RefreshIndexes(publicRoot string, fileSystem filesystem.FS) error {
 	if fileSystem == nil {
 		fileSystem = filesystem.OS
 	}
+	catalogRefreshMu.Lock()
+	defer catalogRefreshMu.Unlock()
 	privateRoot := filepath.Join(publicRoot, ".pages")
 	if err := fileSystem.MkdirAll(privateRoot, 0o700); err != nil {
 		return fmt.Errorf("create pages state: %w", err)
@@ -163,22 +188,40 @@ func sortCatalogPages(pages []catalogPage) {
 }
 
 func makeCatalogTargets(publicRoot string, scopes []catalogScope) []catalogTarget {
-	targets := make([]catalogTarget, 0, len(scopes))
+	targets := make([]catalogTarget, 0, len(scopes)*2)
 	identities := scopes[1:]
 	for _, scope := range scopes {
 		if scope.identity == "" {
-			targets = append(targets, catalogTarget{
-				key:     "root",
-				path:    filepath.Join(publicRoot, "index.html"),
-				content: renderRootIndex(scope.pages, identities),
-			})
+			targets = append(targets,
+				catalogTarget{
+					key:     "root",
+					path:    filepath.Join(publicRoot, "index.html"),
+					marker:  catalogMarker,
+					content: renderRootIndex(scope.pages, identities),
+				},
+				catalogTarget{
+					key:     "root-record",
+					path:    filepath.Join(publicRoot, catalogRecordName),
+					marker:  catalogRecordMark,
+					content: renderScopeRecord(scope.pages),
+				},
+			)
 			continue
 		}
-		targets = append(targets, catalogTarget{
-			key:     "identity-" + scope.identity,
-			path:    filepath.Join(publicRoot, IdentityScope(scope.identity), "index.html"),
-			content: renderIdentityIndex(scope.identity, scope.pages, identities),
-		})
+		targets = append(targets,
+			catalogTarget{
+				key:     "identity-" + scope.identity,
+				path:    filepath.Join(publicRoot, IdentityScope(scope.identity), "index.html"),
+				marker:  catalogMarker,
+				content: renderIdentityIndex(scope.identity, scope.pages, identities),
+			},
+			catalogTarget{
+				key:     "record-identity-" + scope.identity,
+				path:    filepath.Join(publicRoot, IdentityScope(scope.identity), catalogRecordName),
+				marker:  catalogRecordMark,
+				content: renderScopeRecord(scope.pages),
+			},
+		)
 	}
 	return targets
 }
@@ -209,29 +252,49 @@ func renderIdentityIndex(identity string, pages []catalogPage, identities []cata
 	return body.Bytes()
 }
 
+// renderScopeRecord renders the Page Record for one scope. The Record
+// carries the same Pages in the same order as its Index. It names no scope:
+// the file path already says which scope it belongs to.
+func renderScopeRecord(pages []catalogPage) []byte {
+	var body bytes.Buffer
+	body.WriteString("{\n  \"pages\": [")
+	for index, page := range pages {
+		if index > 0 {
+			body.WriteString(",")
+		}
+		body.WriteString("\n    {\"slug\": ")
+		body.WriteString(strconv.Quote(page.slug))
+		body.WriteString(", \"published\": ")
+		body.WriteString(strconv.Quote(page.modTime.Format(time.RFC3339)))
+		body.WriteString("}")
+	}
+	if len(pages) > 0 {
+		body.WriteString("\n  ")
+	}
+	body.WriteString("]\n}\n")
+	return body.Bytes()
+}
+
+// writeIdentityNavigation lists the scopes a reader can jump to. Each entry
+// is a name and a link; the current scope is not labeled, because a reader
+// is already on it.
 func writeIdentityNavigation(body *bytes.Buffer, currentIdentity string, identities []catalogScope) {
 	body.WriteString("<nav aria-label=\"Identity navigation\"><ul>\n")
 	defaultHref := "./"
 	if currentIdentity != "" {
 		defaultHref = "../"
 	}
-	defaultKind := "Default Identity"
-	if currentIdentity == "" {
-		defaultKind = "Current"
-	}
-	writeListItem(body, "Default Identity", defaultKind, defaultHref)
+	writeListItem(body, "Default Identity", defaultHref)
 	for _, identity := range identities {
 		name := "@" + identity.identity + "/"
 		href := "./" + IdentityScope(identity.identity) + "/"
 		if currentIdentity != "" {
 			href = "../" + IdentityScope(identity.identity) + "/"
 		}
-		kind := "Named Identity"
 		if identity.identity == currentIdentity {
 			href = "./"
-			kind = "Current"
 		}
-		writeListItem(body, name, kind, href)
+		writeListItem(body, name, href)
 	}
 	body.WriteString("</ul></nav>\n")
 }
@@ -242,12 +305,17 @@ func writeDocumentStart(body *bytes.Buffer, title, heading string) {
 	body.WriteString("<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	body.WriteString("<title>")
 	body.WriteString(html.EscapeString(title))
-	body.WriteString("</title>\n<style>body{font:16px system-ui,sans-serif;line-height:1.5;max-width:52rem;margin:3rem auto;padding:0 1rem;color:#202124}a{color:#1257a6;text-decoration:none}a:hover{text-decoration:underline}ul{list-style:none;padding:0;border-top:1px solid #d9d9d9}li{display:flex;gap:1rem;padding:.65rem 0;border-bottom:1px solid #d9d9d9}li a{flex:1}li span{color:#6b7280;font-size:.9rem}nav{color:#6b7280;margin-bottom:1.5rem}h1{font-size:2rem;font-weight:600}h2{font-size:1.1rem;margin-top:2rem}</style>\n")
+	body.WriteString("</title>\n<style>body{font:16px system-ui,sans-serif;line-height:1.5;max-width:52rem;margin:3rem auto;padding:0 1rem;color:#202124}a{color:#1257a6;text-decoration:none}a:hover{text-decoration:underline}ul{list-style:none;padding:0;border-top:1px solid #d9d9d9}li{display:flex;gap:1rem;padding:.65rem 0;border-bottom:1px solid #d9d9d9}li a{flex:1}li span{color:#6b7280;font-size:.9rem}li time{color:#6b7280;font-size:.9rem;font-variant-numeric:tabular-nums}nav{color:#6b7280;margin-bottom:1.5rem}h1{font-size:2rem;font-weight:600}h2{font-size:1.1rem;margin-top:2rem}</style>\n")
 	body.WriteString("</head>\n<body>\n<main>\n<h1>")
 	body.WriteString(html.EscapeString(heading))
 	body.WriteString("</h1>\n")
 }
 
+// ensureCatalogTargetsSafe refuses to replace a target that is not a pages
+// artifact. A Page Index is recognized by its marker anywhere in the file,
+// because an Index is HTML a host may have wrapped. A Page Record is
+// recognized by its prefix, because JSON that merely embeds the pages key
+// somewhere in a nested object is a foreign file.
 func ensureCatalogTargetsSafe(targets []catalogTarget, fileSystem filesystem.FS) error {
 	for _, target := range targets {
 		if _, err := fileSystem.Lstat(target.path); errors.Is(err, fs.ErrNotExist) {
@@ -256,14 +324,24 @@ func ensureCatalogTargetsSafe(targets []catalogTarget, fileSystem filesystem.FS)
 			return fmt.Errorf("inspect existing catalog %q: %w", target.path, err)
 		}
 		content, err := fileSystem.ReadFile(target.path)
-		if err != nil || !bytes.Contains(content, []byte(catalogMarker)) {
-			if err != nil {
-				return fmt.Errorf("refusing to replace existing catalog %q: %w", target.path, err)
-			}
+		if err != nil {
+			return fmt.Errorf("refusing to replace existing catalog %q: %w", target.path, err)
+		}
+		if !isCatalogArtifact(content, target.marker, target.path) {
 			return fmt.Errorf("refusing to replace existing catalog %q: move the existing file first", target.path)
 		}
 	}
 	return nil
+}
+
+// isCatalogArtifact reports whether content is a pages artifact marked by
+// marker. A JSON marker must match at the start of the file; an HTML marker
+// may appear anywhere in the document.
+func isCatalogArtifact(content []byte, marker, path string) bool {
+	if strings.HasSuffix(path, catalogRecordName) {
+		return bytes.HasPrefix(content, []byte(marker))
+	}
+	return bytes.Contains(content, []byte(marker))
 }
 
 func writeDocumentEnd(body *bytes.Buffer) {
@@ -280,22 +358,41 @@ func writePageList(body *bytes.Buffer, heading string, pages []catalogPage, pref
 	}
 	body.WriteString("<ul>\n")
 	for _, page := range pages {
-		writeListItem(body, page.slug+"/", "Page", prefix+page.slug+"/")
+		writePageListItem(body, page, prefix+page.slug+"/")
 	}
 	body.WriteString("</ul>\n</section>\n")
 }
 
-func writeListItem(body *bytes.Buffer, name, kind, href string) {
+func writePageListItem(body *bytes.Buffer, page catalogPage, href string) {
+	published := page.modTime.Format(publishedTimeLayout)
+	body.WriteString("<li><a href=\"")
+	body.WriteString(html.EscapeString(href))
+	body.WriteString("\">")
+	body.WriteString(html.EscapeString(page.slug + "/"))
+	body.WriteString("</a><time datetime=\"")
+	body.WriteString(html.EscapeString(page.modTime.Format(time.RFC3339)))
+	body.WriteString("\">")
+	body.WriteString(html.EscapeString(published))
+	body.WriteString("</time></li>\n")
+}
+
+func writeListItem(body *bytes.Buffer, name, href string) {
 	body.WriteString("<li><a href=\"")
 	body.WriteString(html.EscapeString(href))
 	body.WriteString("\">")
 	body.WriteString(html.EscapeString(name))
-	body.WriteString("</a><span>")
-	body.WriteString(html.EscapeString(kind))
-	body.WriteString("</span></li>\n")
+	body.WriteString("</a></li>\n")
 }
 
 func writeCatalog(target catalogTarget, stagingDir string, fileSystem filesystem.FS) error {
+	// A refresh that produces byte-identical output writes nothing: the
+	// artifact keeps its inode, so a reader never sees a needless rewrite
+	// and a concurrent reader cannot observe a missing file.
+	if existing, err := fileSystem.ReadFile(target.path); err == nil && bytes.Equal(existing, target.content) {
+		return nil
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("inspect existing catalog %q: %w", target.path, err)
+	}
 	temporary, err := fileSystem.CreateTemp(stagingDir, "new-*.html")
 	if err != nil {
 		return fmt.Errorf("create catalog staging file: %w", err)
@@ -381,16 +478,32 @@ func recoverCatalogSwaps(publicRoot, stagingDir string, fileSystem filesystem.FS
 
 func catalogRecoveryTarget(publicRoot, name string) (string, bool) {
 	rest := strings.TrimPrefix(name, "old-")
+	// The random hex never contains a hyphen, so the first hyphen ends it and
+	// the remainder is the target key. An Index key is `identity-<name>` and a
+	// Record key is `record-identity-<name>`. The Record form is tested first
+	// because its prefix is longer, which keeps the two forms unambiguous for
+	// every valid Identity name — including names like `record-bumble`.
 	_, key, found := strings.Cut(rest, "-")
 	if !found {
 		return "", false
 	}
-	if key == "root" {
+	switch key {
+	case "root":
 		return filepath.Join(publicRoot, "index.html"), true
+	case "root-record":
+		return filepath.Join(publicRoot, catalogRecordName), true
 	}
-	identity, found := strings.CutPrefix(key, "identity-")
-	if !found || !ValidName(identity) {
-		return "", false
+	if identity, found := strings.CutPrefix(key, "record-identity-"); found {
+		if !ValidName(identity) {
+			return "", false
+		}
+		return filepath.Join(publicRoot, IdentityScope(identity), catalogRecordName), true
 	}
-	return filepath.Join(publicRoot, IdentityScope(identity), "index.html"), true
+	if identity, found := strings.CutPrefix(key, "identity-"); found {
+		if !ValidName(identity) {
+			return "", false
+		}
+		return filepath.Join(publicRoot, IdentityScope(identity), "index.html"), true
+	}
+	return "", false
 }

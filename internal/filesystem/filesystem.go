@@ -35,5 +35,6 @@ type FS interface {
 	Remove(string) error
 	RemoveAll(string) error
 	Abs(string) (string, error)
+	EvalSymlinks(string) (string, error)
 	Lock(string) (func(), error)
 }

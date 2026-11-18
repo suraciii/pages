@@ -14,7 +14,7 @@ func TestRootHelp(t *testing.T) {
 			command := newTestCommand()
 			command.runtime.userConfigDir = func() (string, error) { return "", errors.New("must not be called") }
 			status := run([]string{argument}, command.runtime)
-			if status != 0 || command.stderr.Len() != 0 || !strings.Contains(command.stdout.String(), "\nUsage:\n") || !strings.Contains(command.stdout.String(), "pages skill") {
+			if status != 0 || command.stderr.Len() != 0 || !strings.Contains(command.stdout.String(), "pages publishes static HTML pages as a self-hosted service.") || !strings.Contains(command.stdout.String(), "run the self-hosted service") || !strings.Contains(command.stdout.String(), "\nUsage:\n") || !strings.Contains(command.stdout.String(), "pages publish") {
 				t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
 			}
 		})
@@ -60,11 +60,11 @@ func TestRootDispatchesMinimalLocalPublish(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve work directory: %v", err)
 	}
-	wantOutput := filepath.Join(workDir, "report") + string(filepath.Separator)
+	wantOutput := filepath.Join(workDir, "pages-public", "report") + string(filepath.Separator)
 	if status != 0 || command.stderr.Len() != 0 || strings.TrimSpace(command.stdout.String()) != wantOutput {
 		t.Fatalf("status = %d, stdout = %q, stderr = %q", status, command.stdout.String(), command.stderr.String())
 	}
-	contents, err := command.fileSystem.ReadFile(filepath.Join(workDir, "report", "index.html"))
+	contents, err := command.fileSystem.ReadFile(filepath.Join(workDir, "pages-public", "report", "index.html"))
 	if err != nil || string(contents) != "<h1>ready</h1>" {
 		t.Fatalf("page = %q, %v", contents, err)
 	}

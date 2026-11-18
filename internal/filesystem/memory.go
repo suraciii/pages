@@ -305,6 +305,21 @@ func (memory *Memory) Abs(path string) (string, error) {
 	return memory.clean(path), nil
 }
 
+// EvalSymlinks returns the cleaned path. The memory file system has no
+// symbolic links, so the only failure is a missing path.
+func (memory *Memory) EvalSymlinks(path string) (string, error) {
+	path = memory.clean(path)
+	memory.mu.RLock()
+	defer memory.mu.RUnlock()
+	if _, found := memory.nodes[path]; !found {
+		if err := memory.ancestorDirectoryLocked(path); err != nil {
+			return "", pathError("evalsymlinks", path, err)
+		}
+		return "", pathError("evalsymlinks", path, fs.ErrNotExist)
+	}
+	return path, nil
+}
+
 func (memory *Memory) Lock(path string) (func(), error) {
 	path = memory.clean(path)
 	memory.mu.Lock()

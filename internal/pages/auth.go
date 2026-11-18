@@ -101,16 +101,26 @@ func (tokens Tokens) validate(requireToken bool) error {
 	return nil
 }
 
-// LoadTokens reads a non-empty tokens file through fileSystem.
+// LoadTokens reads a tokens file through fileSystem. A missing or empty file
+// yields an empty set; remote Uploads are then rejected with 401.
 func LoadTokens(fileSystem filesystem.FS, path string) (Tokens, error) {
 	tokens, err := ReadTokensFile(fileSystem, path)
 	if err != nil {
 		return Tokens{}, err
 	}
-	if err := tokens.validate(true); err != nil {
+	if err := tokens.validate(false); err != nil {
 		return Tokens{}, err
 	}
 	return tokens, nil
+}
+
+// Count reports the number of configured Tokens.
+func (tokens Tokens) Count() int {
+	count := len(tokens.Identities)
+	if tokens.Token != "" {
+		count++
+	}
+	return count
 }
 
 // ReadTokensFile reads structured Tokens through fileSystem. A missing file
@@ -129,6 +139,9 @@ func ReadTokensFile(fileSystem filesystem.FS, path string) (Tokens, error) {
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&tokens); err != nil {
+		if errors.Is(err, io.EOF) {
+			return Tokens{}, nil
+		}
 		return Tokens{}, fmt.Errorf("parse tokens file: %w", err)
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {

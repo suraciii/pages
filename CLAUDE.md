@@ -14,15 +14,15 @@
 - Choose the simplest design that fully meets the current requirements.
 - Keep modules small and keep different concerns separate.
 - Check the standard library before adding a dependency.
-- Keep the write path atomic and the identity boundary explicit. The server
+- Keep the write path atomic and the identity boundary explicit. The Service
   derives identity from the verified token only.
-- Keep the upload server on loopback. A static file server hosts the
-  public reads.
+- Keep the Service on loopback by default. A public listener is an explicit
+  deployment choice, and a non-loopback listener should use TLS.
 
 ## Architecture Constraints
 
 - Follow [design/architecture.md](design/architecture.md) when changing the
-  upload path or the publish contract.
+  read path, the upload path, or the publish contract.
 - Follow [design/testing.md](design/testing.md) when changing tests.
 
 ## Documentation

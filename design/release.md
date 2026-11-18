@@ -48,9 +48,13 @@ Before a tag is created, all of these conditions must hold for one commit on
 - `make ci` and `go test -race -count=1 ./...` pass.
 - The CLI builds for Linux, macOS, and Windows on `amd64` and `arm64`.
 - The Dockerfile builds successfully. The build must not push an image.
-- Local Publish and the Caddy static-host contract pass a deployment
-  acceptance check. The Page returns `200`, `/.pages/*` returns `404`, and the
-  required security headers are present.
+- Local Publish and the self-hosted Service deployment acceptance check pass.
+  A Publish in remote mode through a loopback listener returns a Page with
+  `200`, `/.pages/*` returns `404`, the reference security headers are
+  present, and `GET /__pages/healthz` returns `200`. A TLS listener with a
+  test certificate serves the same Page under `https`. A no-token Service
+  starts read-only: local mode still works and a remote Upload returns `401`.
+  A tokens or TLS path inside the Public Root exits 1.
 - Product and design documents have no unresolved `Gap` that affects the
   release.
 
@@ -61,7 +65,7 @@ loopback services. It is separate from the hermetic test suite in
 ### Sequence
 
 1. Merge the release preparation and wait for the exact `main` commit's
-   required GitHub checks. Complete the Caddy deployment acceptance and the
+   required GitHub checks. Complete the Service deployment acceptance and the
    product and design document review.
 2. Dispatch the Release workflow from `main` with the version to publish:
 
@@ -97,4 +101,5 @@ defect in a new version.
 
 ## Status
 
-The `v0.0.1` candidate is in preparation. No public release tag exists.
+The `v0.0.1` candidate is in preparation. No public release tag exists. The
+self-hosted Service is implemented; the remaining work is release acceptance.

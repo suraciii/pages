@@ -17,17 +17,22 @@ import (
 
 // ServerConfig contains the local filesystem and authorization boundary.
 type ServerConfig struct {
-	PublicRoot     string
-	Tokens         Tokens
-	MaxUploadBytes int64
-	FileSystem     filesystem.FS
+	PublicRoot            string
+	Tokens                Tokens
+	MaxUploadBytes        int64
+	ContentSecurityPolicy string
+	FileSystem            filesystem.FS
+	Logger                *log.Logger
 }
 
-// Server publishes standalone HTML pages into an identity namespace.
+// Server serves and publishes standalone HTML pages into an identity
+// namespace.
 type Server struct {
-	stager         *Stager
-	fileSystem     filesystem.FS
-	maxUploadBytes int64
+	stager                *Stager
+	fileSystem            filesystem.FS
+	maxUploadBytes        int64
+	contentSecurityPolicy string
+	logger                *log.Logger
 
 	tokensMu sync.RWMutex
 	tokens   Tokens
@@ -40,8 +45,19 @@ func NewServer(config ServerConfig) (*Server, error) {
 	if config.MaxUploadBytes <= 0 {
 		return nil, errors.New("maximum upload bytes must be positive")
 	}
-	if err := config.Tokens.validate(true); err != nil {
+	if err := config.Tokens.validate(false); err != nil {
 		return nil, err
+	}
+	contentSecurityPolicy := config.ContentSecurityPolicy
+	if contentSecurityPolicy == "" {
+		contentSecurityPolicy = DefaultContentSecurityPolicy
+	}
+	if strings.ContainsAny(contentSecurityPolicy, "\r\n") {
+		return nil, errors.New("content security policy must be one line")
+	}
+	logger := config.Logger
+	if logger == nil {
+		logger = log.Default()
 	}
 	fileSystem := config.FileSystem
 	if fileSystem == nil {
@@ -55,13 +71,15 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, err
 	}
 	server := &Server{
-		stager:         stager,
-		fileSystem:     fileSystem,
-		tokens:         config.Tokens,
-		maxUploadBytes: config.MaxUploadBytes,
+		stager:                stager,
+		fileSystem:            fileSystem,
+		tokens:                config.Tokens,
+		maxUploadBytes:        config.MaxUploadBytes,
+		contentSecurityPolicy: contentSecurityPolicy,
+		logger:                logger,
 	}
 	if err := server.RefreshIndex(); err != nil {
-		log.Printf("pages serve: refresh page index: %v", err)
+		server.logger.Printf("refresh page index: %v", err)
 	}
 	return server, nil
 }
@@ -85,15 +103,19 @@ func (server *Server) RefreshIndex() error {
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if request.Method == http.MethodGet && request.URL.Path == "/healthz" {
-		writer.WriteHeader(http.StatusOK)
-		return
+	server.setSecurityHeaders(writer)
+	switch request.Method {
+	case http.MethodGet, http.MethodHead:
+		server.serveRead(writer, request)
+	case http.MethodPost:
+		server.serveUpload(writer, request)
+	default:
+		writer.Header().Set("Allow", "GET, HEAD, POST")
+		http.Error(writer, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 	}
-	if request.Method != http.MethodPost {
-		http.NotFound(writer, request)
-		return
-	}
+}
 
+func (server *Server) serveUpload(writer http.ResponseWriter, request *http.Request) {
 	slug, valid := uploadSlug(request.URL.Path)
 	if !valid {
 		http.NotFound(writer, request)
@@ -118,7 +140,7 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 
 	if err := server.publish(writer, request, identity, slug); err != nil {
 		switch {
-		case errors.Is(err, errInvalidUTF8), errors.Is(err, errEmptyBody), errors.Is(err, errInvalidZip):
+		case errors.Is(err, ErrInvalidUTF8), errors.Is(err, errEmptyBody), errors.Is(err, errInvalidZip):
 			http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		case isMaxBytesError(err):
 			http.Error(writer, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
@@ -128,7 +150,7 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	if err := server.RefreshIndex(); err != nil {
-		log.Printf("pages serve: refresh page index: %v", err)
+		server.logger.Printf("refresh page index: %v", err)
 	}
 
 	writer.WriteHeader(http.StatusNoContent)
@@ -162,7 +184,7 @@ func (server *Server) publishHTML(writer http.ResponseWriter, request *http.Requ
 
 	limitedBody := http.MaxBytesReader(writer, request.Body, server.maxUploadBytes)
 	defer limitedBody.Close()
-	validator := &utf8Validator{}
+	validator := NewUTF8Validator()
 	bytesWritten, copyError := io.Copy(indexFile, io.TeeReader(limitedBody, validator))
 	closeError := indexFile.Close()
 	if copyError != nil {
@@ -175,7 +197,7 @@ func (server *Server) publishHTML(writer http.ResponseWriter, request *http.Requ
 		return errEmptyBody
 	}
 	if !validator.Valid() {
-		return errInvalidUTF8
+		return ErrInvalidUTF8
 	}
 	return server.stager.SwapHTML(identity, slug, stagedDir)
 }

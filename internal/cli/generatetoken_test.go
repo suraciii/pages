@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -37,9 +38,12 @@ func newTestCommand() *testCommand {
 			environment:      func(name string) string { return environment[name] },
 			userConfigDir:    func() (string, error) { return "/config", nil },
 			currentDirectory: func() (string, error) { return workDir, nil },
-			stdout:           stdout,
-			stderr:           stderr,
-			version:          "v1.2.3",
+			listen: func(string, string) (net.Listener, error) {
+				return nil, errors.New("test bind failure")
+			},
+			stdout:  stdout,
+			stderr:  stderr,
+			version: "v1.2.3",
 		},
 		fileSystem:  fileSystem,
 		environment: environment,
